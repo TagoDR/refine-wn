@@ -8,10 +8,10 @@
 - [x] Setup `idb-keyval` for persistent storage of project settings.
 
 ## Phase 2: The EPUB Engine (I/O)
-- [ ] Create `EpubService` using `jszip`.
-- [ ] Task: Parse `META-INF/container.xml` to find the root `.opf` file.
-- [ ] Task: Extract Chapter list (TOC) and map to XHTML files.
-- [ ] Task: Build "Save to EPUB" function (reassembling the ZIP).
+- [x] Create `EpubService` using `jszip`.
+- [x] Task: Parse `META-INF/container.xml` to find the root `.opf` file.
+- [x] Task: Extract Chapter list (TOC) and map to XHTML files.
+- [x] Task: Build "Save to EPUB" function (reassembling the ZIP). (Implemented in a Web Worker for efficiency).
 
 ## Phase 3: The Refinement Pipeline
 - [ ] Implement `TextCleaner` class:
