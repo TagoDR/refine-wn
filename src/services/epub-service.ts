@@ -6,6 +6,7 @@ export interface Chapter {
 	title: string;
 	href: string;
 	content: string;
+	originalContent?: string;
 }
 
 export interface EpubMetadata {
@@ -109,6 +110,7 @@ export class EpubService {
 						href,
 						title: id, // Placeholder title, could be refined by parsing TOC
 						content,
+						originalContent: content,
 					});
 				}
 			}

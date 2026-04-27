@@ -29,6 +29,6 @@
 - [x] UI: Progress bar for batch processing chapters.
 
 ## Phase 5: Polish & TTS
-- [ ] Implement "TTS Preview" button using the browser's SpeechSynthesis API.
-- [ ] Add "Diff View" to compare raw MTL vs AI-refined text.
-- [ ] Final optimization for RDNA 4 / local GPU processing.
+- [x] Implement "TTS Preview" button using the browser's SpeechSynthesis API. (With phonetic glossary support).
+- [x] Add "Diff View" to compare raw MTL vs AI-refined text. (Using `wa-split-panel`).
+- [x] Final optimization for RDNA 4 / local GPU processing. (Worker-based processing and efficient caching).

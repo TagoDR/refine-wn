@@ -5,6 +5,7 @@ import { type Chapter, type EpubMetadata } from './services/epub-service';
 import { EpubWorkerClient } from './services/epub-worker-client';
 import { GlossaryManager, type GlossaryEntry } from './services/glossary-manager';
 import { TextCleaner } from './services/text-cleaner';
+import { TtsService } from './services/tts-service';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -52,21 +53,30 @@ export class AppRoot extends LitElement {
 
 		main {
 			padding: var(--wa-space-l);
-			max-width: 800px;
+			max-width: 1000px;
 			margin: 0 auto;
+			height: calc(100vh - 120px);
+			overflow: hidden;
+			display: flex;
+			flex-direction: column;
+		}
+
+		.chapter-container {
+			flex: 1;
+			overflow-y: auto;
 		}
 
 		.chapter-content {
 			line-height: 1.6;
 			font-size: var(--wa-font-size-m);
 			white-space: pre-wrap;
+			padding: var(--wa-space-m);
 		}
 
-		.glossary-form {
-			display: flex;
-			flex-direction: column;
-			gap: var(--wa-space-s);
-			margin-bottom: var(--wa-space-l);
+		.raw-content {
+			background-color: var(--wa-color-neutral-50);
+			color: var(--wa-color-neutral-600);
+			font-size: var(--wa-font-size-s);
 		}
 
 		.glossary-list {
@@ -85,12 +95,27 @@ export class AppRoot extends LitElement {
 			display: flex;
 			gap: var(--wa-space-s);
 			margin-bottom: var(--wa-space-m);
+			flex-wrap: wrap;
 		}
 
 		.progress-container {
 			padding: var(--wa-space-m);
 			background-color: var(--wa-color-neutral-100);
 			border-top: 1px solid var(--wa-color-neutral-200);
+		}
+
+		wa-split-panel {
+			height: 100%;
+			border: 1px solid var(--wa-color-neutral-200);
+			border-radius: var(--wa-border-radius-m);
+		}
+
+		.panel-label {
+			padding: var(--wa-space-xs) var(--wa-space-m);
+			background: var(--wa-color-neutral-100);
+			border-bottom: 1px solid var(--wa-color-neutral-200);
+			font-weight: bold;
+			font-size: var(--wa-font-size-xs);
 		}
 	`;
 
@@ -101,11 +126,13 @@ export class AppRoot extends LitElement {
 	@state() private isProcessing = false;
 	@state() private progress = 0;
 	@state() private statusMessage = '';
+	@state() private diffMode = false;
 
 	private epubClient = new EpubWorkerClient();
 	private aiBridge = new AiBridge();
 	private glossaryManager = new GlossaryManager();
 	private textCleaner = new TextCleaner();
+	private ttsService = new TtsService();
 
 	async firstUpdated() {
 		await this.glossaryManager.load();
@@ -141,7 +168,7 @@ export class AppRoot extends LitElement {
 		try {
 			const chapter = this.chapters[this.selectedChapterIndex];
 			const cleaned = this.textCleaner.clean(chapter.content);
-			const json = await this.aiBridge.extractNames(cleaned.substring(0, 4000)); // Limit context
+			const json = await this.aiBridge.extractNames(cleaned.substring(0, 4000));
 			const newEntries = JSON.parse(json);
 			
 			for (const entry of newEntries) {
@@ -169,16 +196,15 @@ export class AppRoot extends LitElement {
 		try {
 			const chapter = this.chapters[this.selectedChapterIndex];
 			const cleaned = this.textCleaner.clean(chapter.content);
-			const glossaryContext = this.glossaryManager.exportJson();
+			const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
 			
 			const refined = await this.aiBridge.refineChapter(cleaned, glossaryContext);
 			
-			// Update local chapter content
 			this.chapters[this.selectedChapterIndex] = {
 				...chapter,
 				content: refined
 			};
-			this.chapters = [...this.chapters]; // Trigger update
+			this.chapters = [...this.chapters];
 		} catch (error) {
 			console.error(error);
 			alert('AI Refinement failed');
@@ -186,6 +212,16 @@ export class AppRoot extends LitElement {
 			this.isProcessing = false;
 			this.statusMessage = '';
 		}
+	}
+
+	private handleSpeak() {
+		if (this.selectedChapterIndex === -1) return;
+		const chapter = this.chapters[this.selectedChapterIndex];
+		this.ttsService.speak(chapter.content, this.glossaryEntries);
+	}
+
+	private handleStopSpeak() {
+		this.ttsService.cancel();
 	}
 
 	render() {
@@ -253,15 +289,43 @@ export class AppRoot extends LitElement {
 							</wa-button>
 							<wa-button size="small" variant="primary" @click=${this.handleRefineChapter} ?disabled=${this.isProcessing}>
 								<wa-icon name="sparkles" slot="prefix"></wa-icon>
-								Refine Chapter
+								Refine
+							</wa-button>
+							<wa-button size="small" @click=${() => this.diffMode = !this.diffMode}>
+								<wa-icon name=${this.diffMode ? "eye" : "columns-scroll"} slot="prefix"></wa-icon>
+								${this.diffMode ? "View Refined" : "Diff View"}
+							</wa-button>
+							<div style="flex: 1"></div>
+							<wa-button size="small" @click=${this.handleSpeak}>
+								<wa-icon name="play" slot="prefix"></wa-icon>
+								Listen
+							</wa-button>
+							<wa-button size="small" @click=${this.handleStopSpeak}>
+								<wa-icon name="stop" slot="prefix"></wa-icon>
 							</wa-button>
 						</div>
-						<wa-card>
-							<div slot="header">
-								<strong>${currentChapter.title}</strong>
-							</div>
-							<div class="chapter-content">${currentChapter.content}</div>
-						</wa-card>
+
+						<div class="chapter-container">
+							${this.diffMode ? html`
+								<wa-split-panel position="50">
+									<div slot="start" style="height: 100%; display: flex; flex-direction: column;">
+										<div class="panel-label">RAW MTL</div>
+										<div class="chapter-content raw-content">${currentChapter.originalContent || 'No original content'}</div>
+									</div>
+									<div slot="end" style="height: 100%; display: flex; flex-direction: column;">
+										<div class="panel-label">REFINED PROSE</div>
+										<div class="chapter-content">${currentChapter.content}</div>
+									</div>
+								</wa-split-panel>
+							` : html`
+								<wa-card style="height: 100%; overflow: auto;">
+									<div slot="header">
+										<strong>${currentChapter.title}</strong>
+									</div>
+									<div class="chapter-content">${currentChapter.content}</div>
+								</wa-card>
+							`}
+						</div>
 					` : html`
 						<div style="text-align: center; margin-top: 100px; color: var(--wa-color-neutral-500);">
 							<wa-icon name="book-open" style="font-size: 4rem; display: block; margin-bottom: 1rem;"></wa-icon>
