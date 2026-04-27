@@ -14,13 +14,13 @@
 - [x] Task: Build "Save to EPUB" function (reassembling the ZIP). (Implemented in a Web Worker for efficiency).
 
 ## Phase 3: The Refinement Pipeline
-- [ ] Implement `TextCleaner` class:
-    - [ ] Filter: Remove consecutive blank lines.
-    - [ ] Filter: Detect and strip specific editor commentary tags.
-    - [ ] Filter: Normalize scene dividers (`***`, `---`).
-- [ ] Implement `GlossaryManager`:
-    - [ ] Import/Export JSON functionality.
-    - [ ] UI for editing "Original vs Translated vs Phonetic".
+- [x] Implement `TextCleaner` class:
+    - [x] Filter: Remove consecutive blank lines.
+    - [x] Filter: Detect and strip specific editor commentary tags.
+    - [x] Filter: Normalize scene dividers (`***`, `---`).
+- [x] Implement `GlossaryManager`:
+    - [x] Import/Export JSON functionality.
+    - [x] UI for editing "Original vs Translated vs Phonetic".
 
 ## Phase 4: Local AI Integration
 - [ ] Create `AiBridge` for LM Studio/Ollama connectivity.

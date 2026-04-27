@@ -3,12 +3,18 @@ import type { Chapter, EpubMetadata } from './epub-service';
 export class EpubWorkerClient {
 	private worker: Worker;
 	private nextId = 0;
-	private pendingRequests = new Map<number, { resolve: (val: any) => void; reject: (err: any) => void }>();
+	private pendingRequests = new Map<
+		number,
+		{ resolve: (val: any) => void; reject: (err: any) => void }
+	>();
 
 	constructor() {
-		this.worker = new Worker(new URL('../workers/epub-worker.ts', import.meta.url), {
-			type: 'module',
-		});
+		this.worker = new Worker(
+			new URL('../workers/epub-worker.ts', import.meta.url),
+			{
+				type: 'module',
+			},
+		);
 
 		this.worker.onmessage = (e) => {
 			const { id, payload, error } = e.data;
@@ -24,7 +30,9 @@ export class EpubWorkerClient {
 		};
 	}
 
-	async load(data: Blob | ArrayBuffer): Promise<{ metadata: EpubMetadata; chapters: Chapter[] }> {
+	async load(
+		data: Blob | ArrayBuffer,
+	): Promise<{ metadata: EpubMetadata; chapters: Chapter[] }> {
 		return this.send('load', data);
 	}
 

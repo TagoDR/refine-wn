@@ -34,7 +34,9 @@ export class EpubService {
 	private async findOpfPath(): Promise<string> {
 		if (!this.zip) throw new Error('EPUB not loaded');
 
-		const containerXml = await this.zip.file('META-INF/container.xml')?.async('string');
+		const containerXml = await this.zip
+			.file('META-INF/container.xml')
+			?.async('string');
 		if (!containerXml) throw new Error('META-INF/container.xml not found');
 
 		const parser = new DOMParser();
@@ -54,9 +56,14 @@ export class EpubService {
 		const metadata = opfDoc.querySelector('metadata');
 
 		return {
-			title: metadata?.querySelector('title')?.textContent?.trim() || 'Unknown Title',
-			creator: metadata?.querySelector('creator')?.textContent?.trim() || 'Unknown Creator',
-			language: metadata?.querySelector('language')?.textContent?.trim() || 'en',
+			title:
+				metadata?.querySelector('title')?.textContent?.trim() ||
+				'Unknown Title',
+			creator:
+				metadata?.querySelector('creator')?.textContent?.trim() ||
+				'Unknown Creator',
+			language:
+				metadata?.querySelector('language')?.textContent?.trim() || 'en',
 		};
 	}
 
@@ -68,22 +75,26 @@ export class EpubService {
 
 		// 1. Get manifest items
 		const manifestItems = new Map<string, string>();
-		(opfDoc.querySelectorAll('manifest > item') as unknown as any[]).forEach((item: any) => {
-			const id = item.getAttribute('id');
-			const href = item.getAttribute('href');
-			if (id && href) {
-				manifestItems.set(id, href);
-			}
-		});
+		(opfDoc.querySelectorAll('manifest > item') as unknown as any[]).forEach(
+			(item: any) => {
+				const id = item.getAttribute('id');
+				const href = item.getAttribute('href');
+				if (id && href) {
+					manifestItems.set(id, href);
+				}
+			},
+		);
 
 		// 2. Get spine items (order of chapters)
 		const spineItemIds: string[] = [];
-		(opfDoc.querySelectorAll('spine > itemref') as unknown as any[]).forEach((itemref: any) => {
-			const idref = itemref.getAttribute('idref');
-			if (idref) {
-				spineItemIds.push(idref);
-			}
-		});
+		(opfDoc.querySelectorAll('spine > itemref') as unknown as any[]).forEach(
+			(itemref: any) => {
+				const idref = itemref.getAttribute('idref');
+				if (idref) {
+					spineItemIds.push(idref);
+				}
+			},
+		);
 
 		// 3. Map spine to chapters
 		const chapters: Chapter[] = [];
@@ -113,7 +124,7 @@ export class EpubService {
 		if (!this.zip) throw new Error('EPUB not loaded');
 
 		const newZip = new JSZip();
-		
+
 		// Copy all existing files
 		for (const [path, file] of Object.entries(this.zip.files)) {
 			const content = await file.async('uint8array');
@@ -126,12 +137,12 @@ export class EpubService {
 			newZip.file(fullPath, chapter.content);
 		}
 
-		return await newZip.generateAsync({ 
-            type: 'blob', 
-            mimeType: 'application/epub+zip',
-            compression: 'DEFLATE',
-            compressionOptions: { level: 9 }
-        });
+		return await newZip.generateAsync({
+			type: 'blob',
+			mimeType: 'application/epub+zip',
+			compression: 'DEFLATE',
+			compressionOptions: { level: 9 },
+		});
 	}
 
 	private async readXmlFile(path: string): Promise<any> {

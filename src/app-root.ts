@@ -1,6 +1,6 @@
-import { get, set } from 'idb-keyval';
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+import { GlossaryManager, type GlossaryEntry } from './services/glossary-manager';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -12,14 +12,23 @@ export class AppRoot extends LitElement {
 
 		wa-page {
 			height: 100vh;
-			--menu-width: 300px;
+			--menu-width: 350px;
 		}
 
 		[slot='navigation'] {
-			padding: var(--wa-space-m);
 			background-color: var(--wa-color-neutral-50);
 			height: 100%;
 			border-right: solid 1px var(--wa-color-neutral-200);
+			display: flex;
+			flex-direction: column;
+		}
+
+		wa-tab-group {
+			height: 100%;
+		}
+
+		wa-tab-panel {
+			padding: var(--wa-space-m);
 		}
 
 		[slot='header'] {
@@ -47,23 +56,65 @@ export class AppRoot extends LitElement {
 			line-height: 1.6;
 			font-size: var(--wa-font-size-m);
 		}
+
+		.glossary-form {
+			display: flex;
+			flex-direction: column;
+			gap: var(--wa-space-s);
+			margin-bottom: var(--wa-space-l);
+		}
+
+		.glossary-list {
+			display: flex;
+			flex-direction: column;
+			gap: var(--wa-space-xs);
+		}
+
+		.glossary-item {
+			padding: var(--wa-space-xs);
+			border-bottom: 1px solid var(--wa-color-neutral-200);
+			font-size: var(--wa-font-size-s);
+		}
 	`;
 
 	@state()
-	private settings = {
-		theme: 'light',
-		apiKey: '',
-	};
+	private glossaryEntries: GlossaryEntry[] = [];
+
+	private glossaryManager = new GlossaryManager();
 
 	async firstUpdated() {
-		const savedSettings = await get('project-settings');
-		if (savedSettings) {
-			this.settings = savedSettings;
-		}
+		await this.glossaryManager.load();
+		this.glossaryEntries = this.glossaryManager.getAllEntries();
 	}
 
-	protected async saveSettings() {
-		await set('project-settings', this.settings);
+	private async handleAddGlossary(e: Event) {
+		e.preventDefault();
+		const form = e.target as HTMLFormElement;
+		const formData = new FormData(form);
+
+		const entry: GlossaryEntry = {
+			id: crypto.randomUUID(),
+			original: formData.get('original') as string,
+			translated: formData.get('translated') as string,
+			phonetic: formData.get('phonetic') as string,
+			category: formData.get('category') as any,
+		};
+
+		this.glossaryManager.upsertEntry(entry);
+		await this.glossaryManager.save();
+		this.glossaryEntries = this.glossaryManager.getAllEntries();
+		form.reset();
+	}
+
+	private async handleExportGlossary() {
+		const json = this.glossaryManager.exportJson();
+		const blob = new Blob([json], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = 'glossary.json';
+		a.click();
+		URL.revokeObjectURL(url);
 	}
 
 	render() {
@@ -72,7 +123,6 @@ export class AppRoot extends LitElement {
 				<div slot="header">
 					<div class="logo">RefineWN</div>
 					<div style="display: flex; gap: var(--wa-space-s); align-items: center;">
-						<span>Theme: ${this.settings.theme}</span>
 						<wa-button variant="text" data-toggle-nav class="wa-mobile-only">
 							<wa-icon name="bars"></wa-icon>
 						</wa-button>
@@ -80,12 +130,51 @@ export class AppRoot extends LitElement {
 				</div>
 
 				<div slot="navigation">
-					<h3>Chapters</h3>
-					<wa-tree>
-						<wa-tree-item>Chapter 1: The Awakening</wa-tree-item>
-						<wa-tree-item>Chapter 2: The Sect Entrance</wa-tree-item>
-						<wa-tree-item>Chapter 3: Hidden Talent</wa-tree-item>
-					</wa-tree>
+					<wa-tab-group>
+						<wa-tab slot="nav" panel="chapters">Chapters</wa-tab>
+						<wa-tab slot="nav" panel="glossary">Glossary</wa-tab>
+
+						<wa-tab-panel name="chapters">
+							<wa-tree>
+								<wa-tree-item>Chapter 1: The Awakening</wa-tree-item>
+								<wa-tree-item>Chapter 2: The Sect Entrance</wa-tree-item>
+								<wa-tree-item>Chapter 3: Hidden Talent</wa-tree-item>
+							</wa-tree>
+						</wa-tab-panel>
+
+						<wa-tab-panel name="glossary">
+							<form class="glossary-form" @submit=${this.handleAddGlossary}>
+								<wa-input name="original" label="Original" size="small" required></wa-input>
+								<wa-input name="translated" label="Translated" size="small" required></wa-input>
+								<wa-input name="phonetic" label="Phonetic (TTS)" size="small"></wa-input>
+								<wa-select name="category" label="Category" value="Name" size="small">
+									<wa-option value="Name">Name</wa-option>
+									<wa-option value="Place">Place</wa-option>
+									<wa-option value="Term">Term</wa-option>
+									<wa-option value="Other">Other</wa-option>
+								</wa-select>
+								<wa-button type="submit" variant="primary" size="small">Add Entry</wa-button>
+							</form>
+
+							<wa-divider></wa-divider>
+
+							<div class="glossary-list">
+								${this.glossaryEntries.map(
+									(entry) => html`
+									<div class="glossary-item">
+										<strong>${entry.original}</strong>: ${entry.translated} 
+										${entry.phonetic ? html`<i>(${entry.phonetic})</i>` : ''}
+										<wa-tag size="small" variant="neutral">${entry.category}</wa-tag>
+									</div>
+								`,
+								)}
+							</div>
+
+							<wa-button @click=${this.handleExportGlossary} style="margin-top: var(--wa-space-m)" size="small">
+								Export JSON
+							</wa-button>
+						</wa-tab-panel>
+					</wa-tab-group>
 				</div>
 
 				<main>
