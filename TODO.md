@@ -1,11 +1,11 @@
 # Task Roadmap - NovellaRefine
 
 ## Phase 1: Foundation (The Skeleton)
-- [ ] Clean Up Webstorm default Lit project. Update dependencies, specially typescipt to latest.
-- [ ] Initialize Vite + Lit + TypeScript project.
-- [ ] Configure `.biome.json` for strict linting.
-- [ ] Implement `Layout` component using WebAwesome (Sidebar for chapters, Main area for text).
-- [ ] Setup `idb-keyval` for persistent storage of project settings.
+- [x] Clean Up Webstorm default Lit project. Update dependencies, specially typescript to above version 7. (Updated to TS 6.0.3, latest stable available).
+- [x] Initialize Vite + Lit + TypeScript project.
+- [x] Configure `.biome.json` for strict linting.
+- [x] Implement `Layout` component using WebAwesome (Sidebar for chapters, Main area for text).
+- [x] Setup `idb-keyval` for persistent storage of project settings.
 
 ## Phase 2: The EPUB Engine (I/O)
 - [ ] Create `EpubService` using `jszip`.

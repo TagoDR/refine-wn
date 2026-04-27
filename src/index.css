@@ -1,24 +1,13 @@
-:root {
-  color-scheme: light dark;
-  background-color: #ffffff;
-}
+@import "@awesome.me/webawesome/dist/styles/webawesome.css";
+@import "@awesome.me/webawesome/dist/styles/themes/default.css";
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    background-color: #16171d;
-  }
+:root {
+	--wa-color-primary-500: var(--wa-color-blue-500);
 }
 
 body {
-  margin: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-width: 320px;
-  min-height: 100svh;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
+	margin: 0;
+	font-family: var(--wa-font-sans);
+	background-color: var(--wa-color-neutral-0);
+	color: var(--wa-color-neutral-900);
 }
