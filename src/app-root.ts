@@ -1,6 +1,10 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
+import { AiBridge } from './services/ai-bridge';
+import { type Chapter, type EpubMetadata } from './services/epub-service';
+import { EpubWorkerClient } from './services/epub-worker-client';
 import { GlossaryManager, type GlossaryEntry } from './services/glossary-manager';
+import { TextCleaner } from './services/text-cleaner';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -55,6 +59,7 @@ export class AppRoot extends LitElement {
 		.chapter-content {
 			line-height: 1.6;
 			font-size: var(--wa-font-size-m);
+			white-space: pre-wrap;
 		}
 
 		.glossary-form {
@@ -75,56 +80,128 @@ export class AppRoot extends LitElement {
 			border-bottom: 1px solid var(--wa-color-neutral-200);
 			font-size: var(--wa-font-size-s);
 		}
+
+		.controls {
+			display: flex;
+			gap: var(--wa-space-s);
+			margin-bottom: var(--wa-space-m);
+		}
+
+		.progress-container {
+			padding: var(--wa-space-m);
+			background-color: var(--wa-color-neutral-100);
+			border-top: 1px solid var(--wa-color-neutral-200);
+		}
 	`;
 
-	@state()
-	private glossaryEntries: GlossaryEntry[] = [];
+	@state() private chapters: Chapter[] = [];
+	@state() private metadata: EpubMetadata | null = null;
+	@state() private selectedChapterIndex = -1;
+	@state() private glossaryEntries: GlossaryEntry[] = [];
+	@state() private isProcessing = false;
+	@state() private progress = 0;
+	@state() private statusMessage = '';
 
+	private epubClient = new EpubWorkerClient();
+	private aiBridge = new AiBridge();
 	private glossaryManager = new GlossaryManager();
+	private textCleaner = new TextCleaner();
 
 	async firstUpdated() {
 		await this.glossaryManager.load();
 		this.glossaryEntries = this.glossaryManager.getAllEntries();
 	}
 
-	private async handleAddGlossary(e: Event) {
-		e.preventDefault();
-		const form = e.target as HTMLFormElement;
-		const formData = new FormData(form);
+	private async handleFileUpload(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
 
-		const entry: GlossaryEntry = {
-			id: crypto.randomUUID(),
-			original: formData.get('original') as string,
-			translated: formData.get('translated') as string,
-			phonetic: formData.get('phonetic') as string,
-			category: formData.get('category') as any,
-		};
-
-		this.glossaryManager.upsertEntry(entry);
-		await this.glossaryManager.save();
-		this.glossaryEntries = this.glossaryManager.getAllEntries();
-		form.reset();
+		this.isProcessing = true;
+		this.statusMessage = 'Loading EPUB...';
+		try {
+			const result = await this.epubClient.load(file);
+			this.chapters = result.chapters;
+			this.metadata = result.metadata;
+			if (this.chapters.length > 0) this.selectedChapterIndex = 0;
+		} catch (error) {
+			console.error(error);
+			alert('Failed to load EPUB');
+		} finally {
+			this.isProcessing = false;
+			this.statusMessage = '';
+		}
 	}
 
-	private async handleExportGlossary() {
-		const json = this.glossaryManager.exportJson();
-		const blob = new Blob([json], { type: 'application/json' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = 'glossary.json';
-		a.click();
-		URL.revokeObjectURL(url);
+	private async handleExtractNames() {
+		if (this.selectedChapterIndex === -1) return;
+		
+		this.isProcessing = true;
+		this.statusMessage = 'Extracting names with AI...';
+		try {
+			const chapter = this.chapters[this.selectedChapterIndex];
+			const cleaned = this.textCleaner.clean(chapter.content);
+			const json = await this.aiBridge.extractNames(cleaned.substring(0, 4000)); // Limit context
+			const newEntries = JSON.parse(json);
+			
+			for (const entry of newEntries) {
+				this.glossaryManager.upsertEntry({
+					...entry,
+					id: crypto.randomUUID()
+				});
+			}
+			await this.glossaryManager.save();
+			this.glossaryEntries = this.glossaryManager.getAllEntries();
+		} catch (error) {
+			console.error(error);
+			alert('AI Extraction failed');
+		} finally {
+			this.isProcessing = false;
+			this.statusMessage = '';
+		}
+	}
+
+	private async handleRefineChapter() {
+		if (this.selectedChapterIndex === -1) return;
+
+		this.isProcessing = true;
+		this.statusMessage = 'Refining chapter with AI...';
+		try {
+			const chapter = this.chapters[this.selectedChapterIndex];
+			const cleaned = this.textCleaner.clean(chapter.content);
+			const glossaryContext = this.glossaryManager.exportJson();
+			
+			const refined = await this.aiBridge.refineChapter(cleaned, glossaryContext);
+			
+			// Update local chapter content
+			this.chapters[this.selectedChapterIndex] = {
+				...chapter,
+				content: refined
+			};
+			this.chapters = [...this.chapters]; // Trigger update
+		} catch (error) {
+			console.error(error);
+			alert('AI Refinement failed');
+		} finally {
+			this.isProcessing = false;
+			this.statusMessage = '';
+		}
 	}
 
 	render() {
+		const currentChapter = this.chapters[this.selectedChapterIndex];
+
 		return html`
 			<wa-page>
 				<div slot="header">
-					<div class="logo">RefineWN</div>
+					<div class="logo">RefineWN ${this.metadata ? ` - ${this.metadata.title}` : ''}</div>
 					<div style="display: flex; gap: var(--wa-space-s); align-items: center;">
 						<wa-button variant="text" data-toggle-nav class="wa-mobile-only">
 							<wa-icon name="bars"></wa-icon>
+						</wa-button>
+						<input type="file" id="epub-upload" accept=".epub" style="display: none" @change=${this.handleFileUpload}>
+						<wa-button variant="primary" size="small" @click=${() => this.shadowRoot?.getElementById('epub-upload')?.click()}>
+							Upload EPUB
 						</wa-button>
 					</div>
 				</div>
@@ -136,57 +213,61 @@ export class AppRoot extends LitElement {
 
 						<wa-tab-panel name="chapters">
 							<wa-tree>
-								<wa-tree-item>Chapter 1: The Awakening</wa-tree-item>
-								<wa-tree-item>Chapter 2: The Sect Entrance</wa-tree-item>
-								<wa-tree-item>Chapter 3: Hidden Talent</wa-tree-item>
+								${this.chapters.map((ch, index) => html`
+									<wa-tree-item 
+										?selected=${this.selectedChapterIndex === index}
+										@click=${() => this.selectedChapterIndex = index}
+									>
+										${ch.title || `Chapter ${index + 1}`}
+									</wa-tree-item>
+								`)}
 							</wa-tree>
 						</wa-tab-panel>
 
 						<wa-tab-panel name="glossary">
-							<form class="glossary-form" @submit=${this.handleAddGlossary}>
-								<wa-input name="original" label="Original" size="small" required></wa-input>
-								<wa-input name="translated" label="Translated" size="small" required></wa-input>
-								<wa-input name="phonetic" label="Phonetic (TTS)" size="small"></wa-input>
-								<wa-select name="category" label="Category" value="Name" size="small">
-									<wa-option value="Name">Name</wa-option>
-									<wa-option value="Place">Place</wa-option>
-									<wa-option value="Term">Term</wa-option>
-									<wa-option value="Other">Other</wa-option>
-								</wa-select>
-								<wa-button type="submit" variant="primary" size="small">Add Entry</wa-button>
-							</form>
-
-							<wa-divider></wa-divider>
-
 							<div class="glossary-list">
-								${this.glossaryEntries.map(
-									(entry) => html`
+								${this.glossaryEntries.map(entry => html`
 									<div class="glossary-item">
-										<strong>${entry.original}</strong>: ${entry.translated} 
-										${entry.phonetic ? html`<i>(${entry.phonetic})</i>` : ''}
+										<strong>${entry.original}</strong> -> ${entry.translated}
 										<wa-tag size="small" variant="neutral">${entry.category}</wa-tag>
 									</div>
-								`,
-								)}
+								`)}
 							</div>
-
-							<wa-button @click=${this.handleExportGlossary} style="margin-top: var(--wa-space-m)" size="small">
-								Export JSON
-							</wa-button>
 						</wa-tab-panel>
 					</wa-tab-group>
+
+					${this.isProcessing ? html`
+						<div class="progress-container">
+							<div style="margin-bottom: var(--wa-space-xs)">${this.statusMessage}</div>
+							<wa-progress-bar value=${this.progress} ?indeterminate=${this.progress === 0}></wa-progress-bar>
+						</div>
+					` : ''}
 				</div>
 
 				<main>
-					<wa-card>
-						<div slot="header">
-							<strong>Chapter 1: The Awakening</strong>
+					${currentChapter ? html`
+						<div class="controls">
+							<wa-button size="small" @click=${this.handleExtractNames} ?disabled=${this.isProcessing}>
+								<wa-icon name="wand-magic-sparkles" slot="prefix"></wa-icon>
+								Extract Names
+							</wa-button>
+							<wa-button size="small" variant="primary" @click=${this.handleRefineChapter} ?disabled=${this.isProcessing}>
+								<wa-icon name="sparkles" slot="prefix"></wa-icon>
+								Refine Chapter
+							</wa-button>
 						</div>
-						<div class="chapter-content">
-							<p>The morning mist clung to the peaks of the Azure Cloud Pavilion...</p>
-							<p>Long Chen opened his eyes, feeling a strange warmth in his dantian.</p>
+						<wa-card>
+							<div slot="header">
+								<strong>${currentChapter.title}</strong>
+							</div>
+							<div class="chapter-content">${currentChapter.content}</div>
+						</wa-card>
+					` : html`
+						<div style="text-align: center; margin-top: 100px; color: var(--wa-color-neutral-500);">
+							<wa-icon name="book-open" style="font-size: 4rem; display: block; margin-bottom: 1rem;"></wa-icon>
+							<p>Upload an EPUB file to start refining.</p>
 						</div>
-					</wa-card>
+					`}
 				</main>
 
 				<div slot="footer">
@@ -194,11 +275,5 @@ export class AppRoot extends LitElement {
 				</div>
 			</wa-page>
 		`;
-	}
-}
-
-declare global {
-	interface HTMLElementTagNameMap {
-		'app-root': AppRoot;
 	}
 }

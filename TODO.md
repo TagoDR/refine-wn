@@ -23,10 +23,10 @@
     - [x] UI for editing "Original vs Translated vs Phonetic".
 
 ## Phase 4: Local AI Integration
-- [ ] Create `AiBridge` for LM Studio/Ollama connectivity.
-- [ ] Develop "Name Extraction" prompt to pre-fill the glossary.
-- [ ] Develop "Chapter Refinement" prompt with context injection.
-- [ ] UI: Progress bar for batch processing chapters.
+- [x] Create `AiBridge` for LM Studio/Ollama connectivity.
+- [x] Develop "Name Extraction" prompt to pre-fill the glossary.
+- [x] Develop "Chapter Refinement" prompt with context injection.
+- [x] UI: Progress bar for batch processing chapters.
 
 ## Phase 5: Polish & TTS
 - [ ] Implement "TTS Preview" button using the browser's SpeechSynthesis API.
