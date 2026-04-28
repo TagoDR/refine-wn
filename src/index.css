@@ -2,12 +2,12 @@
 @import "@awesome.me/webawesome/dist/styles/themes/default.css";
 
 :root {
-	--wa-color-primary-500: var(--wa-color-blue-500);
+  --wa-color-primary-500: var(--wa-color-blue-500);
 }
 
 body {
-	margin: 0;
-	font-family: var(--wa-font-sans);
-	background-color: var(--wa-color-surface-default);
-	color: var(--wa-color-text-normal);
+  margin: 0;
+  font-family: var(--wa-font-sans);
+  background-color: var(--wa-color-surface-default);
+  color: var(--wa-color-text-normal);
 }

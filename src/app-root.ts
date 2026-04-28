@@ -1,15 +1,15 @@
-import { LitElement, css, html } from 'lit';
+import { css, html, LitElement } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { AiBridge } from './services/ai-bridge';
-import { type Chapter, type EpubMetadata } from './services/epub-service';
+import type { Chapter, EpubMetadata } from './services/epub-service';
 import { EpubWorkerClient } from './services/epub-worker-client';
-import { GlossaryManager, type GlossaryEntry } from './services/glossary-manager';
+import { type GlossaryEntry, GlossaryManager } from './services/glossary-manager';
 import { TextCleaner } from './services/text-cleaner';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
-	static styles = css`
+  static styles = css`
 		:host {
 			display: block;
 			height: 100vh;
@@ -28,14 +28,24 @@ export class AppRoot extends LitElement {
 			border-right: solid 1px var(--wa-color-surface-border);
 			display: flex;
 			flex-direction: column;
+			overflow: hidden;
 		}
 
 		wa-tab-group {
-			height: 100%;
+			flex: 1;
+			min-height: 0;
 		}
 
 		wa-tab-panel {
 			padding: var(--wa-space-m);
+			height: 100%;
+			overflow-y: auto;
+		}
+
+		.nav-footer {
+			padding: var(--wa-space-m);
+			border-top: 1px solid var(--wa-color-surface-border);
+			background: var(--wa-color-surface-raised);
 		}
 
 		[slot='header'] {
@@ -112,6 +122,18 @@ export class AppRoot extends LitElement {
 			padding: var(--wa-space-m);
 			background-color: var(--wa-color-surface-lowered);
 			border-top: 1px solid var(--wa-color-surface-border);
+			display: flex;
+			flex-direction: column;
+			gap: var(--wa-space-xs);
+			margin-top: var(--wa-space-s);
+		}
+
+		.progress-info {
+			display: flex;
+			justify-content: space-between;
+			font-size: var(--wa-font-size-2xs);
+			font-weight: bold;
+			color: var(--wa-color-text-normal);
 		}
 
 		wa-split-panel {
@@ -151,203 +173,294 @@ export class AppRoot extends LitElement {
 		.log-success { color: #b5cea8; }
 	`;
 
-	@state() private chapters: Chapter[] = [];
-	@state() private metadata: EpubMetadata | null = null;
-	@state() private selectedChapterIndex = -1;
-	@state() private glossaryEntries: GlossaryEntry[] = [];
-	@state() private isProcessing = false;
-	@state() private progress = 0;
-	@state() private statusMessage = '';
-	@state() private diffMode = false;
-	@state() private logs: { type: 'info' | 'error' | 'success', message: string, timestamp: string }[] = [];
+  @state() private chapters: Chapter[] = [];
+  @state() private metadata: EpubMetadata | null = null;
+  @state() private selectedChapterIndex = -1;
+  @state() private glossaryEntries: GlossaryEntry[] = [];
+  @state() private isProcessing = false;
+  @state() private progress = 0;
+  @state() private currentStep = 0;
+  @state() private totalSteps = 0;
+  @state() private statusMessage = '';
+  @state() private diffMode = false;
+  @state() private autoProcess = false;
+  @state() private logs: {
+    type: 'info' | 'error' | 'success';
+    message: string;
+    timestamp: string;
+  }[] = [];
 
-	private epubClient = new EpubWorkerClient();
-	private aiBridge = new AiBridge();
-	private glossaryManager = new GlossaryManager();
-	private textCleaner = new TextCleaner();
+  private epubClient = new EpubWorkerClient();
+  private aiBridge = new AiBridge();
+  private glossaryManager = new GlossaryManager();
+  private textCleaner = new TextCleaner();
 
-	private async handleTestAi() {
-		this.isProcessing = true;
-		this.addLog('info', 'Testing AI Connection (Port 5004)...');
-		try {
-			const success = await this.aiBridge.testConnection();
-			if (success) {
-				this.addLog('success', 'AI Connection Successful!');
-			} else {
-				this.addLog('error', 'AI Connection Failed. Check if LM Studio is running on port 5004.');
-			}
-		} catch (error) {
-			this.addLog('error', `AI Connection Error: ${error}`);
-		} finally {
-			this.isProcessing = false;
-		}
-	}
+  private async handleTestAi() {
+    this.isProcessing = true;
+    this.addLog('info', 'Testing AI Connection (Port 5004)...');
+    try {
+      const success = await this.aiBridge.testConnection();
+      if (success) {
+        this.addLog('success', 'AI Connection Successful!');
+      } else {
+        this.addLog('error', 'AI Connection Failed. Check if LM Studio is running on port 5004.');
+      }
+    } catch (error) {
+      this.addLog('error', `AI Connection Error: ${error}`);
+    } finally {
+      this.isProcessing = false;
+    }
+  }
 
-	private addLog(type: 'info' | 'error' | 'success', message: string) {
-		const timestamp = new Date().toLocaleTimeString();
-		this.logs = [...this.logs, { type, message, timestamp }];
-		// Auto scroll to bottom
-		setTimeout(() => {
-			const consoleDiv = this.shadowRoot?.querySelector('.console');
-			if (consoleDiv) consoleDiv.scrollTop = consoleDiv.scrollHeight;
-		}, 50);
-	}
+  private addLog(type: 'info' | 'error' | 'success', message: string) {
+    const timestamp = new Date().toLocaleTimeString();
+    this.logs = [...this.logs, { type, message, timestamp }];
+    // Auto scroll to bottom
+    setTimeout(() => {
+      const consoleDiv = this.shadowRoot?.querySelector('.console');
+      if (consoleDiv) consoleDiv.scrollTop = consoleDiv.scrollHeight;
+    }, 50);
+  }
 
-	async firstUpdated() {
-		await this.glossaryManager.load();
-		this.glossaryEntries = this.glossaryManager.getAllEntries();
-		await this.autoLoadTestEpub();
-	}
+  async firstUpdated() {
+    await this.glossaryManager.load();
+    this.glossaryEntries = this.glossaryManager.getAllEntries();
+    await this.autoLoadTestEpub();
+  }
 
-	private async autoLoadTestEpub() {
-		this.addLog('info', 'Searching for test EPUB...');
-		try {
-			// Try to load the first epub from the test folder if it exists
-			// This assumes the dev server serves the root or the test folder
-			const response = await fetch('/test/test.epub');
-			if (response.ok) {
-				const blob = await response.blob();
-				const file = new File([blob], 'test.epub', { type: 'application/epub+zip' });
-				await this.loadEpubFile(file);
-				this.addLog('success', 'Auto-loaded test EPUB: God Tier Farm');
-			} else {
-				this.addLog('info', 'Test EPUB not found at expected path.');
-			}
-		} catch (error) {
-			this.addLog('error', `Auto-load failed: ${error}`);
-			console.warn('Auto-load test EPUB failed:', error);
-		}
-	}
+  private async autoLoadTestEpub() {
+    this.addLog('info', 'Searching for test EPUB...');
+    try {
+      // Try to load the first epub from the test folder if it exists
+      // This assumes the dev server serves the root or the test folder
+      const response = await fetch('/test/test.epub');
+      if (response.ok) {
+        const blob = await response.blob();
+        const file = new File([blob], 'test.epub', { type: 'application/epub+zip' });
+        await this.loadEpubFile(file);
+        this.addLog('success', 'Auto-loaded test EPUB: God Tier Farm');
+      } else {
+        this.addLog('info', 'Test EPUB not found at expected path.');
+      }
+    } catch (error) {
+      this.addLog('error', `Auto-load failed: ${error}`);
+      console.warn('Auto-load test EPUB failed:', error);
+    }
+  }
 
-	private async handleFileUpload(e: Event) {
-		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		this.addLog('info', `Manual upload: ${file.name}`);
-		await this.loadEpubFile(file);
-	}
+  private async handleFileUpload(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    this.addLog('info', `Manual upload: ${file.name}`);
+    await this.loadEpubFile(file);
+  }
 
-	private async loadEpubFile(file: File) {
-		this.isProcessing = true;
-		this.statusMessage = 'Loading EPUB...';
-		try {
-			const result = await this.epubClient.load(file);
-			this.chapters = result.chapters;
-			this.metadata = result.metadata;
-			if (this.chapters.length > 0) this.selectedChapterIndex = 0;
-			this.addLog('success', `Loaded ${this.chapters.length} chapters.`);
-		} catch (error) {
-			this.addLog('error', `Failed to load EPUB: ${error}`);
-			console.error(error);
-		} finally {
-			this.isProcessing = false;
-			this.statusMessage = '';
-		}
-	}
+  private async loadEpubFile(file: File) {
+    this.isProcessing = true;
+    this.progress = 0;
+    this.addLog('info', `Loading EPUB: ${file.name}`);
+    try {
+      const result = await this.epubClient.load(file);
+      this.chapters = result.chapters;
+      this.metadata = result.metadata;
+      this.addLog('success', `Loaded ${this.chapters.length} chapters.`);
 
-	private async handleExtractNames() {
-		if (this.selectedChapterIndex === -1) return;
-		
-		this.isProcessing = true;
-		this.statusMessage = 'Extracting names with AI...';
-		this.addLog('info', 'Starting AI name extraction...');
-		try {
-			const chapter = this.chapters[this.selectedChapterIndex];
-			const cleaned = this.textCleaner.clean(chapter.content);
-			
-			this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
-			
-			const json = await this.aiBridge.extractNames(cleaned.substring(0, 4000));
-			const newEntries = JSON.parse(json);
-			
-			for (const entry of newEntries) {
-				this.glossaryManager.upsertEntry({
-					...entry,
-					id: crypto.randomUUID()
-				});
-			}
-			await this.glossaryManager.save();
-			this.glossaryEntries = this.glossaryManager.getAllEntries();
-			this.addLog('success', `Extracted ${newEntries.length} new glossary entries.`);
-		} catch (error) {
-			this.addLog('error', `Extraction failed: ${error}`);
-			console.error(error);
-		} finally {
-			this.isProcessing = false;
-			this.statusMessage = '';
-		}
-	}
+      if (this.chapters.length > 0) this.selectedChapterIndex = 0;
 
-	private async handleRefineChapter() {
-		if (this.selectedChapterIndex === -1) return;
+      if (this.autoProcess) {
+        await this.runProcessingPipeline();
+      }
+    } catch (error) {
+      this.addLog('error', `Failed to load EPUB: ${error}`);
+      console.error(error);
+    } finally {
+      this.isProcessing = false;
+      this.statusMessage = '';
+      this.progress = 0;
+    }
+  }
 
-		this.isProcessing = true;
-		this.statusMessage = 'Refining chapter with AI...';
-		this.addLog('info', `Refining chapter: ${this.chapters[this.selectedChapterIndex].title}`);
-		try {
-			const chapter = this.chapters[this.selectedChapterIndex];
-			const cleaned = this.textCleaner.clean(chapter.content);
-			const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
-			
-			this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
-			
-			const refined = await this.aiBridge.refineChapter(cleaned, glossaryContext);
-			
-			this.chapters[this.selectedChapterIndex] = {
-				...chapter,
-				content: refined
-			};
-			this.chapters = [...this.chapters];
-			this.addLog('success', 'Chapter refinement complete.');
-		} catch (error) {
-			this.addLog('error', `Refinement failed: ${error}`);
-			console.error(error);
-		} finally {
-			this.isProcessing = false;
-			this.statusMessage = '';
-		}
-	}
+  private async runProcessingPipeline() {
+    this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
 
-	private async handleCleanup() {
-		if (this.chapters.length === 0) return;
+    // Step 1: Cleanup
+    this.statusMessage = 'Cleanup: Removing junk chapters';
+    this.currentStep = 0;
+    this.totalSteps = 0;
+    this.progress = 5;
+    this.addLog('info', 'Starting AI content cleanup...');
 
-		this.isProcessing = true;
-		this.statusMessage = 'Identifying junk chapters...';
-		this.addLog('info', 'Starting AI content cleanup...');
-		try {
-			this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
-			
-			const chapterData = this.chapters.map(ch => ({
-				id: ch.id,
-				title: ch.title,
-				snippet: this.textCleaner.clean(ch.content).substring(0, 500)
-			}));
+    const chapterData = this.chapters.map(ch => ({
+      id: ch.id,
+      title: ch.title,
+      snippet: this.textCleaner.clean(ch.content).substring(0, 500),
+    }));
 
-			const idsToRemove = await this.aiBridge.identifyJunkChapters(chapterData);
-			this.addLog('info', `AI suggested removing ${idsToRemove.length} chapters: ${idsToRemove.join(', ')}`);
-			
-			if (idsToRemove.length > 0) {
-				const beforeCount = this.chapters.length;
-				this.chapters = this.chapters.filter(ch => !idsToRemove.includes(ch.id));
-				const removedCount = beforeCount - this.chapters.length;
-				this.selectedChapterIndex = this.chapters.length > 0 ? 0 : -1;
-				this.addLog('success', `Removed ${removedCount} junk chapters.`);
-			} else {
-				this.addLog('info', 'No junk chapters identified.');
-			}
-		} catch (error) {
-			this.addLog('error', `Cleanup failed: ${error}`);
-			console.error(error);
-		} finally {
-			this.isProcessing = false;
-			this.statusMessage = '';
-		}
-	}
+    const idsToRemove = await this.aiBridge.identifyJunkChapters(chapterData);
+    if (idsToRemove.length > 0) {
+      this.chapters = this.chapters.filter(ch => !idsToRemove.includes(ch.id));
+      this.addLog('success', `Removed ${idsToRemove.length} junk chapters.`);
+    }
 
-	render() {
-		const currentChapter = this.chapters[this.selectedChapterIndex];
+    // Step 2: Global Glossary Extraction
+    const extractionLimit = Math.min(this.chapters.length, 5);
+    this.statusMessage = 'Glossary: Extracting names';
+    this.totalSteps = extractionLimit;
+    this.progress = 20;
 
-		return html`
+    for (let i = 0; i < extractionLimit; i++) {
+      this.currentStep = i + 1;
+      this.progress = 20 + (i / extractionLimit) * 20;
+      const chapter = this.chapters[i];
+      const cleaned = this.textCleaner.clean(chapter.content);
+      try {
+        const json = await this.aiBridge.extractNames(cleaned.substring(0, 4000));
+        const newEntries = JSON.parse(json);
+        for (const entry of newEntries) {
+          this.glossaryManager.upsertEntry({ ...entry, id: crypto.randomUUID() });
+        }
+      } catch (_e) {
+        this.addLog('error', `Glossary extraction failed for chapter ${i + 1}`);
+      }
+    }
+    await this.glossaryManager.save();
+    this.glossaryEntries = this.glossaryManager.getAllEntries();
+    this.addLog('success', 'Global glossary updated.');
+
+    // Step 3: Batch Refinement
+    const total = this.chapters.length;
+    this.statusMessage = 'Refinement: Polishing prose';
+    this.totalSteps = total;
+    this.progress = 40;
+
+    const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
+
+    for (let i = 0; i < total; i++) {
+      this.currentStep = i + 1;
+      this.progress = 40 + (i / total) * 60;
+
+      const chapter = this.chapters[i];
+      const cleaned = this.textCleaner.clean(chapter.content);
+      try {
+        const refined = await this.aiBridge.refineChapter(cleaned, glossaryContext);
+        this.chapters[i] = { ...chapter, content: refined };
+        if (i % 3 === 0) this.chapters = [...this.chapters];
+      } catch (_e) {
+        this.addLog('error', `Refinement failed for chapter: ${chapter.title}`);
+      }
+    }
+    this.chapters = [...this.chapters];
+    this.addLog('success', 'Full EPUB refinement complete.');
+    this.currentStep = total;
+    this.progress = 100;
+  }
+
+  private async handleCleanup() {
+    if (this.chapters.length === 0) return;
+    this.isProcessing = true;
+    this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
+
+    try {
+      this.statusMessage = 'Cleanup: Removing junk chapters';
+      this.currentStep = 0;
+      this.totalSteps = 0;
+      this.progress = 10;
+
+      const chapterData = this.chapters.map(ch => ({
+        id: ch.id,
+        title: ch.title,
+        snippet: this.textCleaner.clean(ch.content).substring(0, 500),
+      }));
+
+      const idsToRemove = await this.aiBridge.identifyJunkChapters(chapterData);
+      if (idsToRemove.length > 0) {
+        this.chapters = this.chapters.filter(ch => !idsToRemove.includes(ch.id));
+        this.addLog('success', `Removed ${idsToRemove.length} junk chapters.`);
+      } else {
+        this.addLog('info', 'No junk chapters found.');
+      }
+      this.progress = 100;
+    } catch (error) {
+      this.addLog('error', `Cleanup failed: ${error}`);
+    } finally {
+      this.isProcessing = false;
+      this.statusMessage = '';
+    }
+  }
+
+  private async handleExtractNames() {
+    if (this.chapters.length === 0) return;
+    this.isProcessing = true;
+    this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
+
+    try {
+      const limit = Math.min(this.chapters.length, 5);
+      this.statusMessage = 'Glossary: Extracting names';
+      this.totalSteps = limit;
+
+      for (let i = 0; i < limit; i++) {
+        this.currentStep = i + 1;
+        this.progress = (i / limit) * 100;
+        const chapter = this.chapters[i];
+        const cleaned = this.textCleaner.clean(chapter.content);
+        try {
+          const json = await this.aiBridge.extractNames(cleaned.substring(0, 4000));
+          const newEntries = JSON.parse(json);
+          for (const entry of newEntries) {
+            this.glossaryManager.upsertEntry({ ...entry, id: crypto.randomUUID() });
+          }
+        } catch (_e) {
+          this.addLog('error', `Extraction failed for chapter ${i + 1}`);
+        }
+      }
+      await this.glossaryManager.save();
+      this.glossaryEntries = this.glossaryManager.getAllEntries();
+      this.addLog('success', 'Global glossary updated.');
+      this.progress = 100;
+    } finally {
+      this.isProcessing = false;
+      this.statusMessage = '';
+    }
+  }
+
+  private async handleRefineAll() {
+    if (this.chapters.length === 0) return;
+    this.isProcessing = true;
+    this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
+
+    try {
+      const total = this.chapters.length;
+      this.statusMessage = 'Refinement: Polishing prose';
+      this.totalSteps = total;
+      const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
+
+      for (let i = 0; i < total; i++) {
+        this.currentStep = i + 1;
+        this.progress = (i / total) * 100;
+        const chapter = this.chapters[i];
+        const cleaned = this.textCleaner.clean(chapter.content);
+        try {
+          const refined = await this.aiBridge.refineChapter(cleaned, glossaryContext);
+          this.chapters[i] = { ...chapter, content: refined };
+          if (i % 3 === 0) this.chapters = [...this.chapters];
+        } catch (_e) {
+          this.addLog('error', `Refinement failed for: ${chapter.title}`);
+        }
+      }
+      this.chapters = [...this.chapters];
+      this.addLog('success', 'Full EPUB refinement complete.');
+      this.progress = 100;
+    } finally {
+      this.isProcessing = false;
+      this.statusMessage = '';
+    }
+  }
+
+  render() {
+    const currentChapter = this.chapters[this.selectedChapterIndex];
+
+    return html`
 			<wa-page>
 				<div slot="header">
 					<div class="logo">RefineWN ${this.metadata ? ` - ${this.metadata.title}` : ''}</div>
@@ -357,6 +470,16 @@ export class AppRoot extends LitElement {
 							Test AI
 						</wa-button>
 						
+						<wa-divider vertical></wa-divider>
+
+						<wa-switch 
+							?checked=${this.autoProcess} 
+							@wa-change=${(e: Event) => (this.autoProcess = (e.target as HTMLInputElement).checked)}
+							style="margin-right: var(--wa-space-xs);"
+						>
+							Auto
+						</wa-switch>
+
 						<wa-divider vertical></wa-divider>
 
 						<wa-button size="small" @click=${this.handleCleanup} ?disabled=${this.isProcessing || this.chapters.length === 0} title="Remove junk chapters">
@@ -369,14 +492,14 @@ export class AppRoot extends LitElement {
 							Extract
 						</wa-button>
 
-						<wa-button size="small" variant="primary" @click=${this.handleRefineChapter} ?disabled=${this.isProcessing || this.selectedChapterIndex === -1} title="Refine prose">
+						<wa-button size="small" variant="primary" @click=${this.handleRefineAll} ?disabled=${this.isProcessing || this.chapters.length === 0} title="Refine all chapters">
 							<wa-icon name="sparkles" slot="prefix"></wa-icon>
-							Refine
+							Refine All
 						</wa-button>
 
-						<wa-button size="small" @click=${() => this.diffMode = !this.diffMode} ?disabled=${this.selectedChapterIndex === -1}>
-							<wa-icon name=${this.diffMode ? "eye" : "columns-scroll"} slot="prefix"></wa-icon>
-							${this.diffMode ? "Refined" : "Diff"}
+						<wa-button size="small" @click=${() => (this.diffMode = !this.diffMode)} ?disabled=${this.selectedChapterIndex === -1}>
+							<wa-icon name=${this.diffMode ? 'eye' : 'columns-scroll'} slot="prefix"></wa-icon>
+							${this.diffMode ? 'Refined' : 'Diff'}
 						</wa-button>
 
 						<wa-divider vertical></wa-divider>
@@ -396,41 +519,42 @@ export class AppRoot extends LitElement {
 
 						<wa-tab-panel name="chapters">
 							<wa-tree>
-								${this.chapters.map((ch, index) => html`
+								${this.chapters.map(
+                  (ch, index) => html`
 									<wa-tree-item 
 										?selected=${this.selectedChapterIndex === index}
-										@click=${() => this.selectedChapterIndex = index}
+										@click=${() => (this.selectedChapterIndex = index)}
 									>
 										${ch.title || `Chapter ${index + 1}`}
 									</wa-tree-item>
-								`)}
+								`,
+                )}
 							</wa-tree>
 						</wa-tab-panel>
 
 						<wa-tab-panel name="glossary">
 							<div class="glossary-list">
-								${this.glossaryEntries.map(entry => html`
+								${this.glossaryEntries.map(
+                  entry => html`
 									<div class="glossary-item">
 										<strong>${entry.original}</strong> -> ${entry.translated}
 										<wa-tag size="small" variant="neutral">${entry.category}</wa-tag>
 									</div>
-								`)}
+								`,
+                )}
 							</div>
 						</wa-tab-panel>
 					</wa-tab-group>
-
-					${this.isProcessing ? html`
-						<div class="progress-container">
-							<div style="margin-bottom: var(--wa-space-xs)">${this.statusMessage}</div>
-							<wa-progress-bar value=${this.progress} ?indeterminate=${this.progress === 0}></wa-progress-bar>
-						</div>
-					` : ''}
 				</div>
 
 				<main>
-					${currentChapter ? html`
+					${
+            currentChapter
+              ? html`
 						<div class="chapter-container">
-							${this.diffMode ? html`
+							${
+                this.diffMode
+                  ? html`
 								<wa-split-panel position="50">
 									<div slot="start" style="height: 100%; display: flex; flex-direction: column;">
 										<div class="panel-label">RAW MTL</div>
@@ -441,37 +565,56 @@ export class AppRoot extends LitElement {
 										<div class="chapter-content">${unsafeHTML(currentChapter.content)}</div>
 									</div>
 								</wa-split-panel>
-							` : html`
+							`
+                  : html`
 								<wa-card style="height: 100%; overflow: auto;">
 									<div slot="header">
 										<strong>${currentChapter.title}</strong>
 									</div>
 									<div class="chapter-content">${unsafeHTML(currentChapter.content)}</div>
 								</wa-card>
-							`}
+							`
+              }
 						</div>
-					` : html`
+					`
+              : html`
 						<div style="text-align: center; margin-top: 100px; color: var(--wa-color-text-quiet);">
 							<wa-icon name="book-open" style="font-size: 4rem; display: block; margin-bottom: 1rem;"></wa-icon>
 							<p>Upload an EPUB file to start refining.</p>
 						</div>
-					`}
+					`
+          }
+
+					${
+            this.isProcessing
+              ? html`
+						<div class="progress-container">
+							<div class="progress-info">
+								<span>${this.statusMessage}</span>
+								<span>${this.totalSteps > 0 ? `${this.currentStep}/${this.totalSteps}` : ''}</span>
+							</div>
+							<wa-progress-bar value=${this.progress} ?indeterminate=${this.progress === 0}></wa-progress-bar>
+							<div class="progress-info" style="justify-content: flex-end; margin-top: -2px;">
+								<span>${Math.round(this.progress)}%</span>
+							</div>
+						</div>
+					`
+              : ''
+          }
 
 					<div class="console">
 						<div style="font-weight: bold; margin-bottom: 4px; border-bottom: 1px solid #444;">Process Console</div>
-						${this.logs.map(log => html`
+						${this.logs.map(
+              log => html`
 							<div class="log-entry log-${log.type}">
 								[${log.timestamp}] ${log.message}
 							</div>
-						`)}
+						`,
+            )}
 						${this.logs.length === 0 ? html`<div>Waiting for activity...</div>` : ''}
 					</div>
 				</main>
-
-				<div slot="footer">
-					&copy; 2026 RefineWN Project
-				</div>
 			</wa-page>
 		`;
-	}
+  }
 }

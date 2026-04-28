@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prettier": "prettier --write \"**/*.{md,html,svg}\" \"!dist/**\" \"!node_modules/**\" \"!*.user.js\"",
+    "biome": "biome check --fix ."
   },
   "devDependencies": {
     "@awesome.me/webawesome": "^3.5.0",
@@ -21,5 +23,22 @@
   "dependencies": {
     "jszip": "^3.10.1",
     "linkedom": "^0.18.12"
+  },
+  "prettier": {
+    "overrides": [
+      {
+        "files": "*.svg",
+        "options": {
+          "parser": "html"
+        }
+      }
+    ],
+    "semi": true,
+    "singleQuote": true,
+    "trailingComma": "all",
+    "printWidth": 100,
+    "arrowParens": "avoid",
+    "endOfLine": "crlf",
+    "singleAttributePerLine": true
   }
 }
