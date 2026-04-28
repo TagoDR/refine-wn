@@ -6,7 +6,6 @@ import { type Chapter, type EpubMetadata } from './services/epub-service';
 import { EpubWorkerClient } from './services/epub-worker-client';
 import { GlossaryManager, type GlossaryEntry } from './services/glossary-manager';
 import { TextCleaner } from './services/text-cleaner';
-import { TtsService } from './services/tts-service';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -42,10 +41,18 @@ export class AppRoot extends LitElement {
 		[slot='header'] {
 			background-color: var(--wa-color-surface-raised);
 			border-bottom: solid 1px var(--wa-color-surface-border);
-			padding: 0 var(--wa-space-m);
+			padding: var(--wa-space-xs) var(--wa-space-m);
 			display: flex;
 			align-items: center;
 			justify-content: space-between;
+			flex-wrap: wrap;
+			gap: var(--wa-space-s);
+		}
+
+		.header-actions {
+			display: flex;
+			gap: var(--wa-space-xs);
+			align-items: center;
 		}
 
 		.logo {
@@ -158,7 +165,23 @@ export class AppRoot extends LitElement {
 	private aiBridge = new AiBridge();
 	private glossaryManager = new GlossaryManager();
 	private textCleaner = new TextCleaner();
-	private ttsService = new TtsService();
+
+	private async handleTestAi() {
+		this.isProcessing = true;
+		this.addLog('info', 'Testing AI Connection (Port 5004)...');
+		try {
+			const success = await this.aiBridge.testConnection();
+			if (success) {
+				this.addLog('success', 'AI Connection Successful!');
+			} else {
+				this.addLog('error', 'AI Connection Failed. Check if LM Studio is running on port 5004.');
+			}
+		} catch (error) {
+			this.addLog('error', `AI Connection Error: ${error}`);
+		} finally {
+			this.isProcessing = false;
+		}
+	}
 
 	private addLog(type: 'info' | 'error' | 'success', message: string) {
 		const timestamp = new Date().toLocaleTimeString();
@@ -321,16 +344,6 @@ export class AppRoot extends LitElement {
 		}
 	}
 
-	private handleSpeak() {
-		if (this.selectedChapterIndex === -1) return;
-		const chapter = this.chapters[this.selectedChapterIndex];
-		this.ttsService.speak(chapter.content, this.glossaryEntries);
-	}
-
-	private handleStopSpeak() {
-		this.ttsService.cancel();
-	}
-
 	render() {
 		const currentChapter = this.chapters[this.selectedChapterIndex];
 
@@ -338,13 +351,40 @@ export class AppRoot extends LitElement {
 			<wa-page>
 				<div slot="header">
 					<div class="logo">RefineWN ${this.metadata ? ` - ${this.metadata.title}` : ''}</div>
-					<div style="display: flex; gap: var(--wa-space-s); align-items: center;">
-						<wa-button variant="text" data-toggle-nav class="wa-mobile-only">
-							<wa-icon name="bars"></wa-icon>
+					<div class="header-actions">
+						<wa-button size="small" @click=${this.handleTestAi} ?disabled=${this.isProcessing} title="Test AI Connection">
+							<wa-icon name="plug-circle-bolt" slot="prefix"></wa-icon>
+							Test AI
 						</wa-button>
+						
+						<wa-divider vertical></wa-divider>
+
+						<wa-button size="small" @click=${this.handleCleanup} ?disabled=${this.isProcessing || this.chapters.length === 0} title="Remove junk chapters">
+							<wa-icon name="broom" slot="prefix"></wa-icon>
+							Cleanup
+						</wa-button>
+
+						<wa-button size="small" @click=${this.handleExtractNames} ?disabled=${this.isProcessing || this.selectedChapterIndex === -1} title="Extract glossary names">
+							<wa-icon name="wand-magic-sparkles" slot="prefix"></wa-icon>
+							Extract
+						</wa-button>
+
+						<wa-button size="small" variant="primary" @click=${this.handleRefineChapter} ?disabled=${this.isProcessing || this.selectedChapterIndex === -1} title="Refine prose">
+							<wa-icon name="sparkles" slot="prefix"></wa-icon>
+							Refine
+						</wa-button>
+
+						<wa-button size="small" @click=${() => this.diffMode = !this.diffMode} ?disabled=${this.selectedChapterIndex === -1}>
+							<wa-icon name=${this.diffMode ? "eye" : "columns-scroll"} slot="prefix"></wa-icon>
+							${this.diffMode ? "Refined" : "Diff"}
+						</wa-button>
+
+						<wa-divider vertical></wa-divider>
+
 						<input type="file" id="epub-upload" accept=".epub" style="display: none" @change=${this.handleFileUpload}>
-						<wa-button variant="primary" size="small" @click=${() => this.shadowRoot?.getElementById('epub-upload')?.click()}>
-							Upload EPUB
+						<wa-button variant="primary" size="small" @click=${() => this.shadowRoot?.getElementById('epub-upload')?.click()} title="Upload EPUB">
+							<wa-icon name="file-import" slot="prefix"></wa-icon>
+							Upload
 						</wa-button>
 					</div>
 				</div>
@@ -389,33 +429,6 @@ export class AppRoot extends LitElement {
 
 				<main>
 					${currentChapter ? html`
-						<div class="controls">
-							<wa-button size="small" @click=${this.handleCleanup} ?disabled=${this.isProcessing}>
-								<wa-icon name="broom" slot="prefix"></wa-icon>
-								Cleanup
-							</wa-button>
-							<wa-button size="small" @click=${this.handleExtractNames} ?disabled=${this.isProcessing}>
-								<wa-icon name="wand-magic-sparkles" slot="prefix"></wa-icon>
-								Extract Names
-							</wa-button>
-							<wa-button size="small" variant="primary" @click=${this.handleRefineChapter} ?disabled=${this.isProcessing}>
-								<wa-icon name="sparkles" slot="prefix"></wa-icon>
-								Refine
-							</wa-button>
-							<wa-button size="small" @click=${() => this.diffMode = !this.diffMode}>
-								<wa-icon name=${this.diffMode ? "eye" : "columns-scroll"} slot="prefix"></wa-icon>
-								${this.diffMode ? "View Refined" : "Diff View"}
-							</wa-button>
-							<div style="flex: 1"></div>
-							<wa-button size="small" @click=${this.handleSpeak}>
-								<wa-icon name="play" slot="prefix"></wa-icon>
-								Listen
-							</wa-button>
-							<wa-button size="small" @click=${this.handleStopSpeak}>
-								<wa-icon name="stop" slot="prefix"></wa-icon>
-							</wa-button>
-						</div>
-
 						<div class="chapter-container">
 							${this.diffMode ? html`
 								<wa-split-panel position="50">

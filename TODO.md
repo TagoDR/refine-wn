@@ -21,14 +21,18 @@
 - [x] Implement `GlossaryManager`:
     - [x] Import/Export JSON functionality.
     - [x] UI for editing "Original vs Translated vs Phonetic".
+- [x] Implement AI-powered "Cleanup" to remove covers, TOC, and source pages.
 
 ## Phase 4: Local AI Integration
-- [x] Create `AiBridge` for LM Studio/Ollama connectivity.
+- [x] Create `AiBridge` for LM Studio/Ollama connectivity (Port 5004).
 - [x] Develop "Name Extraction" prompt to pre-fill the glossary.
 - [x] Develop "Chapter Refinement" prompt with context injection.
-- [x] UI: Progress bar for batch processing chapters.
+- [x] UI: Progress bar and integrated Process Console for activity logging.
 
-## Phase 5: Polish & TTS
-- [x] Implement "TTS Preview" button using the browser's SpeechSynthesis API. (With phonetic glossary support).
+## Phase 5: Polish & UX
 - [x] Add "Diff View" to compare raw MTL vs AI-refined text. (Using `wa-split-panel`).
-- [x] Final optimization for RDNA 4 / local GPU processing. (Worker-based processing and efficient caching).
+- [x] Implement dark mode theme using WebAwesome design tokens.
+- [x] Move global actions to Header for better ergonomics and accessibility.
+- [x] Automatic loading of test EPUB for faster development.
+- [~] Removed TTS feature to focus on core prose refinement.
+- [x] Final optimization for local GPU processing via LM Studio.
