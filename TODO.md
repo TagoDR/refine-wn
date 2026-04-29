@@ -4,44 +4,51 @@ This roadmap tracks the transition from a standard sidebar layout to a specializ
 
 ## Phase 6: 4-Column UI Restructure (The Workstation)
 
-- [ ] **Infrastructure: Grid Layout Implementation**
-  - [ ] Implement `.app-grid` CSS grid (250px | 300px | 1fr | 250px).
-  - [ ] Ensure full viewport height (100vh) and no global scrolling.
-  - [ ] Implement responsive column resizing or fixed widths as per plan.
+- [x] **Infrastructure: Grid Layout Implementation**
+  - [x] Implement `.app-grid` CSS grid (280px | 320px | 1fr | 280px).
+  - [x] Ensure full viewport height (100vh) and no global scrolling.
+  - [x] Implement independent column scrolling using nested flexbox/overflow rules.
+  - [x] Implement flexbox constraints for persistent console visibility.
 
-- [ ] **Column 1: File & Chapter Management**
-  - [ ] Create sticky header with `[Open]`, `[Close]`, and `[Save]` buttons.
-  - [ ] Implement `Close` functionality (clear chapters, metadata, and state).
-  - [ ] Implement `Save` functionality (export current session as .epub).
-  - [ ] Refactor Chapter List to include a "Trash" icon per chapter.
-  - [ ] Implement "Trash" logic (remove from current session array).
+- [x] **Column 1: File & Chapter Management**
+  - [x] Create sticky header with `[Open]`, `[Close]`, and `[Save]` buttons.
+  - [x] Implement additive `Open` logic (append chapters from multiple EPUBs).
+  - [x] Implement `Close` functionality (clear chapters, metadata, and state).
+  - [x] Implement `Save` functionality (export current session as .epub).
+  - [x] Refactor Chapter List to include a "Trash" icon per chapter.
+  - [x] Implement "Trash" logic (remove from current session array).
+  - [x] Integrated custom SVG icons (`file-upload.svg`, `x.svg`, `device-floppy.svg`, `trash.svg`).
 
-- [ ] **Column 2: Enhanced Glossary Management**
-  - [ ] Create sticky header with `[Import]`, `[Export]`, and `[Add]` buttons.
-  - [ ] Implement `importTxt` and `exportTxt` (JSON structure wrapped in .txt).
-  - [ ] Update `GlossaryEntry` model to support one-to-many searches (`term` + `searches[]`).
-  - [ ] Implement Glossary Edit Modal (`wa-dialog`):
-    - [ ] Dynamic search term list (add/remove search strings/regex).
-    - [ ] Replacement term input.
-  - [ ] Render glossary list with easy access to edit/delete actions.
+- [x] **Column 2: Enhanced Glossary Management**
+  - [x] Create sticky header with `[Import]`, `[Export]`, `[Clear]`, and `[Add]` buttons.
+  - [x] Implement dictionary-style `importJson` and `exportJson` (`{"term": ["search1", "search2"]}`).
+  - [x] Implement additive import logic (merge terms and searches from multiple files).
+  - [x] Update `GlossaryEntry` model to support one-to-many searches (`term` + `searches[]`).
+  - [x] Implement Glossary Edit Modal (`wa-dialog`):
+    - [x] Dynamic search term list (add/remove search strings/regex).
+    - [x] Replacement term input.
+  - [x] Render glossary list with easy access to edit/delete actions.
+  - [x] Integrated custom SVG icons (`file-import.svg`, `file-export.svg`, `square-plus.svg`, `edit.svg`, `trash.svg`).
 
-- [ ] **Column 3: Reader & Console**
-  - [ ] Top: Implement scrollable Reader view for the selected chapter.
-  - [ ] Bottom: Implement fixed-height (or resizable) Process Console.
-  - [ ] Ensure "Diff View" still works within the Reader section.
+- [x] **Column 3: Reader & Console**
+  - [x] Top: Implement scrollable Reader view for the selected chapter.
+  - [x] Bottom: Implement fixed-height (200px) Process Console.
+  - [x] Ensure "Diff View" still works within the Reader section.
+  - [x] Integrated custom SVG icon (`list-search.svg`).
 
-- [ ] **Column 4: Service Orchestration & Progress**
-  - [ ] List available services (Cleanup, Glossary Extraction, Refinement).
-  - [ ] Implement "Service Action" buttons with clear descriptions.
-  - [ ] Create sticky footer for the global progress bar.
-  - [ ] Update progress bar to show `Analyzed: X / Total: Y` chapters.
+- [x] **Column 4: Service Orchestration & Progress**
+  - [x] List available services (Cleanup, Glossary Extraction, Refinement).
+  - [x] Implement "Service Action" buttons with clear descriptions.
+  - [x] Create sticky footer for the global progress bar.
+  - [x] Update progress bar to show `Analysed: X | Remaining: Y` chapters.
 
 ## Phase 7: Service Logic Updates
 
-- [ ] **Refinement Pipeline Integration**
-  - [ ] Update `AiBridge` to utilize the new one-to-many glossary structure.
-  - [ ] Ensure Regex-based replacement logic is integrated into the prompt or pre-processing.
-  - [ ] Optimize the "Trash" system to ensure excluded chapters are not processed or saved.
+- [x] **Refinement Pipeline Integration**
+  - [x] Update `AiBridge` to utilize the new one-to-many glossary structure.
+  - [x] Updated AI prompts to handle the new `term` and `searches` schema.
+  - [x] Optimize the "Trash" system in `EpubService` to update manifest/spine during save.
+  - [x] Support dynamic manifest additions for appended chapters.
 
 ## Phase 8: Final Validation
 

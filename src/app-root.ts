@@ -9,168 +9,199 @@ import { TextCleaner } from './services/text-cleaner';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
-  static styles = css`
+	static styles = css`
 		:host {
 			display: block;
 			height: 100vh;
 			background-color: var(--wa-color-surface-default);
 			color: var(--wa-color-text-normal);
-		}
-
-		wa-page {
-			height: 100vh;
-			--menu-width: 350px;
-		}
-
-		[slot='navigation'] {
-			background-color: var(--wa-color-surface-lowered);
-			height: 100%;
-			border-right: solid 1px var(--wa-color-surface-border);
-			display: flex;
-			flex-direction: column;
+			font-family: var(--wa-font-family-sans);
 			overflow: hidden;
 		}
 
-		wa-tab-group {
-			flex: 1;
-			min-height: 0;
+		.app-grid {
+			display: grid;
+			grid-template-columns: 280px 320px 1fr 280px;
+			height: 100vh;
+			overflow: hidden;
 		}
 
-		wa-tab-panel {
-			padding: var(--wa-space-m);
-			height: 100%;
-			overflow-y: auto;
-		}
-
-		.nav-footer {
-			padding: var(--wa-space-m);
-			border-top: 1px solid var(--wa-color-surface-border);
-			background: var(--wa-color-surface-raised);
-		}
-
-		[slot='header'] {
-			background-color: var(--wa-color-surface-raised);
-			border-bottom: solid 1px var(--wa-color-surface-border);
-			padding: var(--wa-space-xs) var(--wa-space-m);
+		.column {
 			display: flex;
-			align-items: center;
+			flex-direction: column;
+			height: 100vh;
+			border-right: 1px solid var(--wa-color-surface-border);
+			background: var(--wa-color-surface-raised);
+			min-width: 0;
+			overflow: hidden;
+		}
+
+		.column:last-child {
+			border-right: none;
+		}
+
+		.sticky-header {
+			padding: var(--wa-space-s);
+			background: var(--wa-color-surface-lowered);
+			border-bottom: 1px solid var(--wa-color-surface-border);
+			display: flex;
+			flex-direction: column;
+			gap: var(--wa-space-xs);
+			z-index: 10;
+			flex-shrink: 0;
+		}
+
+		.header-title {
+			font-weight: var(--wa-font-bold);
+			font-size: var(--wa-font-size-s);
+			display: flex;
 			justify-content: space-between;
-			flex-wrap: wrap;
-			gap: var(--wa-space-s);
+			align-items: center;
 		}
 
 		.header-actions {
 			display: flex;
-			gap: var(--wa-space-xs);
-			align-items: center;
+			gap: var(--wa-space-3xs);
 		}
 
-		.logo {
-			font-weight: var(--wa-font-bold);
-			font-size: var(--wa-font-size-l);
-			color: var(--wa-color-brand-60);
-		}
-
-		main {
-			padding: var(--wa-space-l);
-			max-width: 1000px;
-			margin: 0 auto;
-			height: calc(100vh - 120px);
-			overflow: hidden;
-			display: flex;
-			flex-direction: column;
-		}
-
-		.chapter-container {
+		.scroll-content {
 			flex: 1;
 			overflow-y: auto;
-		}
-
-		.chapter-content {
-			line-height: 1.6;
-			font-size: var(--wa-font-size-m);
-			padding: var(--wa-space-m);
-		}
-
-		.raw-content {
-			background-color: var(--wa-color-surface-lowered);
-			color: var(--wa-color-text-quiet);
-			font-size: var(--wa-font-size-s);
-			white-space: pre-wrap;
-		}
-
-		.glossary-list {
+			padding: var(--wa-space-xs);
+			min-height: 0;
 			display: flex;
 			flex-direction: column;
-			gap: var(--wa-space-xs);
 		}
 
+		/* Column 1: Chapters */
+		.chapter-item {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: var(--wa-space-2xs) var(--wa-space-xs);
+			cursor: pointer;
+			border-radius: var(--wa-border-radius-s);
+			font-size: var(--wa-font-size-s);
+			margin-bottom: 2px;
+		}
+
+		.chapter-item:hover {
+			background: var(--wa-color-surface-lowered);
+		}
+
+		.chapter-item.selected {
+			background: var(--wa-color-brand-60);
+			color: white;
+		}
+
+		.trash-btn {
+			opacity: 0.6;
+			transition: opacity 0.2s;
+		}
+
+		.trash-btn:hover {
+			opacity: 1;
+		}
+
+		/* Column 2: Glossary */
 		.glossary-item {
 			padding: var(--wa-space-xs);
 			border-bottom: 1px solid var(--wa-color-surface-border);
-			font-size: var(--wa-font-size-s);
-		}
-
-		.controls {
-			display: flex;
-			gap: var(--wa-space-s);
-			margin-bottom: var(--wa-space-m);
-			flex-wrap: wrap;
-		}
-
-		.progress-container {
-			padding: var(--wa-space-m);
-			background-color: var(--wa-color-surface-lowered);
-			border-top: 1px solid var(--wa-color-surface-border);
 			display: flex;
 			flex-direction: column;
-			gap: var(--wa-space-xs);
-			margin-top: var(--wa-space-s);
+			gap: 4px;
 		}
 
-		.progress-info {
-			display: flex;
-			justify-content: space-between;
+		.glossary-term {
+			font-weight: bold;
+			color: var(--wa-color-brand-60);
+		}
+
+		.glossary-searches {
 			font-size: var(--wa-font-size-2xs);
-			font-weight: bold;
-			color: var(--wa-color-text-normal);
+			color: var(--wa-color-text-quiet);
+			font-style: italic;
 		}
 
-		wa-split-panel {
-			height: 100%;
-			border: 1px solid var(--wa-color-surface-border);
-			border-radius: var(--wa-border-radius-m);
+		/* Column 3: Reader & Console */
+		.reader-col {
+			background: var(--wa-color-surface-default);
+			display: flex;
+			flex-direction: column;
+			height: 100vh;
+			min-height: 0;
+			overflow: hidden;
 		}
 
-		.panel-label {
-			padding: var(--wa-space-xs) var(--wa-space-m);
-			background: var(--wa-color-surface-lowered);
-			border-bottom: 1px solid var(--wa-color-surface-border);
-			font-weight: bold;
-			font-size: var(--wa-font-size-xs);
+		.reader-area {
+			flex: 1;
+			overflow-y: auto;
+			padding: var(--wa-space-l);
+			min-height: 0;
 		}
 
-		.console {
+		.console-area {
+			height: 200px;
 			background: #1e1e1e;
 			color: #d4d4d4;
 			font-family: var(--wa-font-family-code);
 			font-size: var(--wa-font-size-2xs);
-			padding: var(--wa-space-xs);
-			height: 150px;
+			border-top: 4px solid var(--wa-color-surface-border);
+			display: flex;
+			flex-direction: column;
+			flex-shrink: 0;
+		}
+
+		.console-header {
+			padding: 4px 12px;
+			background: #333;
+			font-weight: bold;
+			border-bottom: 1px solid #444;
+			flex-shrink: 0;
+		}
+
+		.console-logs {
+			flex: 1;
 			overflow-y: auto;
-			border-top: 2px solid var(--wa-color-surface-border);
-			margin-top: var(--wa-space-s);
+			padding: 8px;
+			min-height: 0;
 		}
 
-		.log-entry {
-			margin-bottom: 2px;
-			border-bottom: 1px solid #333;
-			padding-bottom: 2px;
+		/* Column 4: Services */
+		.service-card {
+			margin-bottom: var(--wa-space-s);
 		}
 
+		.sticky-footer {
+			margin-top: auto;
+			padding: var(--wa-space-m);
+			background: var(--wa-color-surface-lowered);
+			border-top: 1px solid var(--wa-color-surface-border);
+			flex-shrink: 0;
+		}
+
+		.progress-text {
+			display: flex;
+			justify-content: space-between;
+			font-size: var(--wa-font-size-xs);
+			margin-bottom: 4px;
+		}
+
+		.chapter-content {
+			line-height: 1.8;
+			font-size: 1.1rem;
+			max-width: 800px;
+			margin: 0 auto;
+		}
+
+		.log-entry { margin-bottom: 2px; }
 		.log-error { color: #f44747; }
 		.log-info { color: #4fc1ff; }
 		.log-success { color: #b5cea8; }
+
+		wa-dialog {
+			--width: 500px;
+		}
 	`;
 
   @state() private chapters: Chapter[] = [];
@@ -189,6 +220,10 @@ export class AppRoot extends LitElement {
     message: string;
     timestamp: string;
   }[] = [];
+
+  // Dialog state
+  @state() private isGlossaryDialogOpen = false;
+  @state() private editingEntry: GlossaryEntry | null = null;
 
   private epubClient = new EpubWorkerClient();
   private aiBridge = new AiBridge();
@@ -215,10 +250,9 @@ export class AppRoot extends LitElement {
   private addLog(type: 'info' | 'error' | 'success', message: string) {
     const timestamp = new Date().toLocaleTimeString();
     this.logs = [...this.logs, { type, message, timestamp }];
-    // Auto scroll to bottom
     setTimeout(() => {
-      const consoleDiv = this.shadowRoot?.querySelector('.console');
-      if (consoleDiv) consoleDiv.scrollTop = consoleDiv.scrollHeight;
+      const logDiv = this.shadowRoot?.querySelector('.console-logs');
+      if (logDiv) logDiv.scrollTop = logDiv.scrollHeight;
     }, 50);
   }
 
@@ -229,150 +263,144 @@ export class AppRoot extends LitElement {
   }
 
   private async autoLoadTestEpub() {
-    this.addLog('info', 'Searching for test EPUB...');
     try {
-      // Try to load the first epub from the test folder if it exists
-      // This assumes the dev server serves the root or the test folder
       const response = await fetch('/test/test.epub');
       if (response.ok) {
         const blob = await response.blob();
         const file = new File([blob], 'test.epub', { type: 'application/epub+zip' });
         await this.loadEpubFile(file);
-        this.addLog('success', 'Auto-loaded test EPUB: God Tier Farm');
-      } else {
-        this.addLog('info', 'Test EPUB not found at expected path.');
       }
-    } catch (error) {
-      this.addLog('error', `Auto-load failed: ${error}`);
-      console.warn('Auto-load test EPUB failed:', error);
-    }
+    } catch (_e) {}
   }
 
   private async handleFileUpload(e: Event) {
     const input = e.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
-    this.addLog('info', `Manual upload: ${file.name}`);
     await this.loadEpubFile(file);
+    input.value = '';
   }
 
   private async loadEpubFile(file: File) {
     this.isProcessing = true;
-    this.progress = 0;
-    this.addLog('info', `Loading EPUB: ${file.name}`);
+    this.addLog('info', `Importing EPUB: ${file.name}`);
     try {
       const result = await this.epubClient.load(file);
-      this.chapters = result.chapters;
+      // Additive import: append chapters with unique IDs
+      const newChapters = result.chapters.map(ch => ({
+        ...ch,
+        id: `${file.name.replace(/\s+/g, '_')}-${ch.id}`
+      }));
+      this.chapters = [...this.chapters, ...newChapters];
       this.metadata = result.metadata;
-      this.addLog('success', `Loaded ${this.chapters.length} chapters.`);
-
-      if (this.chapters.length > 0) this.selectedChapterIndex = 0;
-
-      if (this.autoProcess) {
-        await this.runProcessingPipeline();
+      this.addLog('success', `Added ${newChapters.length} chapters. Total: ${this.chapters.length}`);
+      if (this.selectedChapterIndex === -1 && this.chapters.length > 0) {
+        this.selectedChapterIndex = 0;
       }
     } catch (error) {
       this.addLog('error', `Failed to load EPUB: ${error}`);
-      console.error(error);
     } finally {
       this.isProcessing = false;
-      this.statusMessage = '';
-      this.progress = 0;
     }
   }
 
-  private async runProcessingPipeline() {
-    this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
-
-    // Step 1: Cleanup
-    this.statusMessage = 'Cleanup: Removing junk chapters';
-    this.currentStep = 0;
-    this.totalSteps = 0;
-    this.progress = 5;
-    this.addLog('info', 'Starting AI content cleanup...');
-
-    const chapterData = this.chapters.map(ch => ({
-      id: ch.id,
-      title: ch.title,
-      snippet: this.textCleaner.clean(ch.content).substring(0, 500),
-    }));
-
-    const idsToRemove = await this.aiBridge.identifyJunkChapters(chapterData);
-    if (idsToRemove.length > 0) {
-      this.chapters = this.chapters.filter(ch => !idsToRemove.includes(ch.id));
-      this.addLog('success', `Removed ${idsToRemove.length} junk chapters.`);
+  private async handleSaveEpub() {
+    if (this.chapters.length === 0) return;
+    this.isProcessing = true;
+    this.addLog('info', 'Generating refined EPUB...');
+    try {
+      const blob = await this.epubClient.save(this.chapters);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `refined_${this.metadata?.title || 'book'}.epub`;
+      a.click();
+      URL.revokeObjectURL(url);
+      this.addLog('success', 'EPUB saved successfully!');
+    } catch (error) {
+      this.addLog('error', `Save failed: ${error}`);
+    } finally {
+      this.isProcessing = false;
     }
+  }
 
-    // Step 2: Global Glossary Extraction
-    const extractionLimit = Math.min(this.chapters.length, 5);
-    this.statusMessage = 'Glossary: Extracting names';
-    this.totalSteps = extractionLimit;
-    this.progress = 20;
+  private handleCloseProject() {
+    this.chapters = [];
+    this.metadata = null;
+    this.selectedChapterIndex = -1;
+    this.addLog('info', 'Project closed.');
+  }
 
-    for (let i = 0; i < extractionLimit; i++) {
-      this.currentStep = i + 1;
-      this.progress = 20 + (i / extractionLimit) * 20;
-      const chapter = this.chapters[i];
-      const cleaned = this.textCleaner.clean(chapter.content);
-      try {
-        const json = await this.aiBridge.extractNames(cleaned.substring(0, 4000));
-        const newEntries = JSON.parse(json);
-        for (const entry of newEntries) {
-          this.glossaryManager.upsertEntry({ ...entry, id: crypto.randomUUID() });
-        }
-      } catch (_e) {
-        this.addLog('error', `Glossary extraction failed for chapter ${i + 1}`);
-      }
+  private handleTrashChapter(index: number, e: Event) {
+    e.stopPropagation();
+    const chapter = this.chapters[index];
+    this.chapters = this.chapters.filter((_, i) => i !== index);
+    if (this.selectedChapterIndex === index) {
+      this.selectedChapterIndex = this.chapters.length > 0 ? 0 : -1;
+    } else if (this.selectedChapterIndex > index) {
+      this.selectedChapterIndex--;
     }
+    this.addLog('info', `Removed chapter: ${chapter.title}`);
+  }
+
+  private openGlossaryDialog(entry?: GlossaryEntry) {
+    this.editingEntry = entry ? { ...entry } : {
+      id: crypto.randomUUID(),
+      term: '',
+      searches: [''],
+      category: 'Other'
+    };
+    this.isGlossaryDialogOpen = true;
+  }
+
+  private async handleSaveGlossary() {
+    if (!this.editingEntry || !this.editingEntry.term) return;
+    this.editingEntry.searches = this.editingEntry.searches.filter(s => s.trim() !== '');
+    this.glossaryManager.upsertEntry(this.editingEntry);
     await this.glossaryManager.save();
     this.glossaryEntries = this.glossaryManager.getAllEntries();
-    this.addLog('success', 'Global glossary updated.');
+    this.isGlossaryDialogOpen = false;
+    this.addLog('success', `Glossary entry saved: ${this.editingEntry.term}`);
+  }
 
-    // Step 3: Batch Refinement
-    const total = this.chapters.length;
-    this.statusMessage = 'Refinement: Polishing prose';
-    this.totalSteps = total;
-    this.progress = 40;
+  private handleExportGlossary() {
+    const text = this.glossaryManager.exportJson();
+    const blob = new Blob([text], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'glossary.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    this.addLog('success', 'Glossary exported to .json');
+  }
 
-    const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
-
-    for (let i = 0; i < total; i++) {
-      this.currentStep = i + 1;
-      this.progress = 40 + (i / total) * 60;
-
-      const chapter = this.chapters[i];
-      const cleaned = this.textCleaner.clean(chapter.content);
-      try {
-        const refined = await this.aiBridge.refineChapter(cleaned, glossaryContext);
-        this.chapters[i] = { ...chapter, content: refined };
-        if (i % 3 === 0) this.chapters = [...this.chapters];
-      } catch (_e) {
-        this.addLog('error', `Refinement failed for chapter: ${chapter.title}`);
-      }
+  private async handleImportGlossary(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    try {
+      this.glossaryManager.importJson(text);
+      await this.glossaryManager.save();
+      this.glossaryEntries = this.glossaryManager.getAllEntries();
+      this.addLog('success', 'Glossary appended from .json');
+    } catch (error) {
+      this.addLog('error', 'Import failed: Invalid dictionary format.');
     }
-    this.chapters = [...this.chapters];
-    this.addLog('success', 'Full EPUB refinement complete.');
-    this.currentStep = total;
-    this.progress = 100;
+    (e.target as HTMLInputElement).value = '';
   }
 
   private async handleCleanup() {
     if (this.chapters.length === 0) return;
     this.isProcessing = true;
     this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
-
     try {
-      this.statusMessage = 'Cleanup: Removing junk chapters';
-      this.currentStep = 0;
-      this.totalSteps = 0;
-      this.progress = 10;
-
+      this.statusMessage = 'Identifying junk chapters...';
       const chapterData = this.chapters.map(ch => ({
         id: ch.id,
         title: ch.title,
         snippet: this.textCleaner.clean(ch.content).substring(0, 500),
       }));
-
       const idsToRemove = await this.aiBridge.identifyJunkChapters(chapterData);
       if (idsToRemove.length > 0) {
         this.chapters = this.chapters.filter(ch => !idsToRemove.includes(ch.id));
@@ -380,7 +408,6 @@ export class AppRoot extends LitElement {
       } else {
         this.addLog('info', 'No junk chapters found.');
       }
-      this.progress = 100;
     } catch (error) {
       this.addLog('error', `Cleanup failed: ${error}`);
     } finally {
@@ -393,34 +420,33 @@ export class AppRoot extends LitElement {
     if (this.chapters.length === 0) return;
     this.isProcessing = true;
     this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
-
     try {
       const limit = Math.min(this.chapters.length, 5);
-      this.statusMessage = 'Glossary: Extracting names';
-      this.totalSteps = limit;
-
+      this.statusMessage = 'Extracting glossary entities...';
       for (let i = 0; i < limit; i++) {
         this.currentStep = i + 1;
+        this.totalSteps = limit;
         this.progress = (i / limit) * 100;
-        const chapter = this.chapters[i];
-        const cleaned = this.textCleaner.clean(chapter.content);
-        try {
-          const json = await this.aiBridge.extractNames(cleaned.substring(0, 4000));
-          const newEntries = JSON.parse(json);
-          for (const entry of newEntries) {
-            this.glossaryManager.upsertEntry({ ...entry, id: crypto.randomUUID() });
-          }
-        } catch (_e) {
-          this.addLog('error', `Extraction failed for chapter ${i + 1}`);
+        const cleaned = this.textCleaner.clean(this.chapters[i].content);
+        const json = await this.aiBridge.extractNames(cleaned.substring(0, 4000));
+        const newEntries = JSON.parse(json);
+        for (const entry of newEntries) {
+          this.glossaryManager.upsertEntry({ 
+            id: crypto.randomUUID(), 
+            term: entry.term, 
+            searches: entry.searches || [],
+            category: entry.category || 'Other'
+          });
         }
       }
       await this.glossaryManager.save();
       this.glossaryEntries = this.glossaryManager.getAllEntries();
-      this.addLog('success', 'Global glossary updated.');
-      this.progress = 100;
+      this.addLog('success', 'Glossary extraction complete.');
+    } catch (error) {
+      this.addLog('error', `Extraction error: ${error}`);
     } finally {
       this.isProcessing = false;
-      this.statusMessage = '';
+      this.progress = 0;
     }
   }
 
@@ -428,193 +454,268 @@ export class AppRoot extends LitElement {
     if (this.chapters.length === 0) return;
     this.isProcessing = true;
     this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
-
     try {
       const total = this.chapters.length;
-      this.statusMessage = 'Refinement: Polishing prose';
       this.totalSteps = total;
       const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
-
       for (let i = 0; i < total; i++) {
         this.currentStep = i + 1;
         this.progress = (i / total) * 100;
-        const chapter = this.chapters[i];
-        const cleaned = this.textCleaner.clean(chapter.content);
-        try {
-          const refined = await this.aiBridge.refineChapter(cleaned, glossaryContext);
-          this.chapters[i] = { ...chapter, content: refined };
-          if (i % 3 === 0) this.chapters = [...this.chapters];
-        } catch (_e) {
-          this.addLog('error', `Refinement failed for: ${chapter.title}`);
-        }
+        this.statusMessage = `Refining: ${this.chapters[i].title}`;
+        const cleaned = this.textCleaner.clean(this.chapters[i].content);
+        const refined = await this.aiBridge.refineChapter(cleaned, glossaryContext);
+        this.chapters[i] = { ...this.chapters[i], content: refined };
+        if (i % 2 === 0) this.chapters = [...this.chapters];
       }
       this.chapters = [...this.chapters];
-      this.addLog('success', 'Full EPUB refinement complete.');
-      this.progress = 100;
+      this.addLog('success', 'Full book refinement complete.');
+    } catch (error) {
+      this.addLog('error', `Refinement failed: ${error}`);
     } finally {
       this.isProcessing = false;
-      this.statusMessage = '';
+      this.progress = 0;
     }
+  }
+
+  private async handleClearGlossary() {
+    if (confirm('Are you sure you want to clear the entire glossary?')) {
+      this.glossaryEntries = [];
+      // Manually clear the map in glossaryManager
+      const entries = this.glossaryManager.getAllEntries();
+      for (const entry of entries) {
+        this.glossaryManager.deleteEntry(entry.id);
+      }
+      await this.glossaryManager.save();
+      this.addLog('info', 'Glossary cleared.');
+    }
+  }
+
+  private async handleDeleteGlossary(id: string, e: Event) {
+    e.stopPropagation();
+    this.glossaryManager.deleteEntry(id);
+    await this.glossaryManager.save();
+    this.glossaryEntries = this.glossaryManager.getAllEntries();
+    this.addLog('info', 'Glossary entry removed.');
   }
 
   render() {
     const currentChapter = this.chapters[this.selectedChapterIndex];
 
     return html`
-			<wa-page>
-				<div slot="header">
-					<div class="logo">RefineWN ${this.metadata ? ` - ${this.metadata.title}` : ''}</div>
-					<div class="header-actions">
-						<wa-button size="small" @click=${this.handleTestAi} ?disabled=${this.isProcessing} title="Test AI Connection">
-							<wa-icon name="plug-circle-bolt" slot="prefix"></wa-icon>
-							Test AI
-						</wa-button>
-						
-						<wa-divider vertical></wa-divider>
-
-						<wa-switch 
-							?checked=${this.autoProcess} 
-							@wa-change=${(e: Event) => (this.autoProcess = (e.target as HTMLInputElement).checked)}
-							style="margin-right: var(--wa-space-xs);"
-						>
-							Auto
-						</wa-switch>
-
-						<wa-divider vertical></wa-divider>
-
-						<wa-button size="small" @click=${this.handleCleanup} ?disabled=${this.isProcessing || this.chapters.length === 0} title="Remove junk chapters">
-							<wa-icon name="broom" slot="prefix"></wa-icon>
-							Cleanup
-						</wa-button>
-
-						<wa-button size="small" @click=${this.handleExtractNames} ?disabled=${this.isProcessing || this.selectedChapterIndex === -1} title="Extract glossary names">
-							<wa-icon name="wand-magic-sparkles" slot="prefix"></wa-icon>
-							Extract
-						</wa-button>
-
-						<wa-button size="small" variant="primary" @click=${this.handleRefineAll} ?disabled=${this.isProcessing || this.chapters.length === 0} title="Refine all chapters">
-							<wa-icon name="sparkles" slot="prefix"></wa-icon>
-							Refine All
-						</wa-button>
-
-						<wa-button size="small" @click=${() => (this.diffMode = !this.diffMode)} ?disabled=${this.selectedChapterIndex === -1}>
-							<wa-icon name=${this.diffMode ? 'eye' : 'columns-scroll'} slot="prefix"></wa-icon>
-							${this.diffMode ? 'Refined' : 'Diff'}
-						</wa-button>
-
-						<wa-divider vertical></wa-divider>
-
-						<input type="file" id="epub-upload" accept=".epub" style="display: none" @change=${this.handleFileUpload}>
-						<wa-button variant="primary" size="small" @click=${() => this.shadowRoot?.getElementById('epub-upload')?.click()} title="Upload EPUB">
-							<wa-icon name="file-import" slot="prefix"></wa-icon>
-							Upload
-						</wa-button>
+			<div class="app-grid">
+				<!-- Column 1: File Management -->
+				<div class="column">
+					<div class="sticky-header">
+						<div class="header-title">
+							<span>CHAPTERS</span>
+							<wa-tag size="small" variant="neutral">${this.chapters.length}</wa-tag>
+						</div>
+						<div class="header-actions">
+							<wa-button size="small" variant="brand" @click=${() => this.shadowRoot?.getElementById('epub-upload')?.click()}>
+								<wa-icon src="/src/icons/file-upload.svg"></wa-icon> Open
+							</wa-button>
+							<wa-button size="small" @click=${this.handleCloseProject} ?disabled=${this.chapters.length === 0}>
+								<wa-icon src="/src/icons/x.svg"></wa-icon> Close
+							</wa-button>
+							<wa-button size="small" variant="success" @click=${this.handleSaveEpub} ?disabled=${this.chapters.length === 0}>
+								<wa-icon src="/src/icons/device-floppy.svg"></wa-icon> Save
+							</wa-button>
+							<input type="file" id="epub-upload" accept=".epub" style="display: none" @change=${this.handleFileUpload}>
+						</div>
+					</div>
+					<div class="scroll-content">
+						${this.chapters.map((ch, i) => html`
+							<div class="chapter-item ${this.selectedChapterIndex === i ? 'selected' : ''}" @click=${() => (this.selectedChapterIndex = i)}>
+								<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+									${ch.title || `Chapter ${i + 1}`}
+								</span>
+								<wa-button class="trash-btn" size="extra-small" variant="danger" ghost @click=${(e: Event) => this.handleTrashChapter(i, e)}>
+									<wa-icon src="/src/icons/trash.svg"></wa-icon>
+								</wa-button>
+							</div>
+						`)}
+						${this.chapters.length === 0 ? html`<div style="text-align:center; padding-top:2rem; color:var(--wa-color-text-quiet);">No book loaded</div>` : ''}
 					</div>
 				</div>
 
-				<div slot="navigation">
-					<wa-tab-group>
-						<wa-tab slot="nav" panel="chapters">Chapters</wa-tab>
-						<wa-tab slot="nav" panel="glossary">Glossary</wa-tab>
-
-						<wa-tab-panel name="chapters">
-							<wa-tree>
-								${this.chapters.map(
-                  (ch, index) => html`
-									<wa-tree-item 
-										?selected=${this.selectedChapterIndex === index}
-										@click=${() => (this.selectedChapterIndex = index)}
-									>
-										${ch.title || `Chapter ${index + 1}`}
-									</wa-tree-item>
-								`,
-                )}
-							</wa-tree>
-						</wa-tab-panel>
-
-						<wa-tab-panel name="glossary">
-							<div class="glossary-list">
-								${this.glossaryEntries.map(
-                  entry => html`
-									<div class="glossary-item">
-										<strong>${entry.original}</strong> -> ${entry.translated}
-										<wa-tag size="small" variant="neutral">${entry.category}</wa-tag>
+				<!-- Column 2: Glossary -->
+				<div class="column">
+					<div class="sticky-header">
+						<div class="header-title">
+							<span>GLOSSARY</span>
+							<wa-tag size="small" variant="neutral">${this.glossaryEntries.length}</wa-tag>
+						</div>
+						<div class="header-actions">
+							<wa-button size="small" @click=${() => this.shadowRoot?.getElementById('glossary-import')?.click()}>
+								<wa-icon src="/src/icons/file-import.svg"></wa-icon> Import
+							</wa-button>
+							<wa-button size="small" @click=${this.handleExportGlossary} ?disabled=${this.glossaryEntries.length === 0}>
+								<wa-icon src="/src/icons/file-export.svg"></wa-icon> Export
+							</wa-button>
+							<wa-button size="small" variant="danger" ghost @click=${this.handleClearGlossary} ?disabled=${this.glossaryEntries.length === 0}>
+								<wa-icon src="/src/icons/trash.svg"></wa-icon>
+							</wa-button>
+							<wa-button size="small" variant="brand" appearance="accent" @click=${() => this.openGlossaryDialog()}>
+								<wa-icon src="/src/icons/square-plus.svg"></wa-icon>
+							</wa-button>
+							<input type="file" id="glossary-import" accept=".json" style="display: none" @change=${this.handleImportGlossary}>
+						</div>
+					</div>
+					<div class="scroll-content">
+						${this.glossaryEntries.map(entry => html`
+							<div class="glossary-item" @click=${() => this.openGlossaryDialog(entry)} style="cursor: pointer;">
+								<div style="display:flex; justify-content:space-between; align-items:flex-start;">
+									<div class="glossary-term">${entry.term}</div>
+									<div style="display:flex; gap:4px;">
+										<wa-icon src="/src/icons/edit.svg" style="font-size: var(--wa-font-size-xs); color: var(--wa-color-text-quiet);"></wa-icon>
+										<wa-button size="extra-small" variant="danger" ghost @click=${(e: Event) => this.handleDeleteGlossary(entry.id, e)}>
+											<wa-icon src="/src/icons/trash.svg" style="font-size: var(--wa-font-size-xs);"></wa-icon>
+										</wa-button>
 									</div>
-								`,
-                )}
+								</div>
+								<div class="glossary-searches">${entry.searches.join(', ')}</div>
+								<wa-tag size="extra-small" variant="neutral">${entry.category}</wa-tag>
 							</div>
-						</wa-tab-panel>
-					</wa-tab-group>
+						`)}
+					</div>
 				</div>
 
-				<main>
-					${
-            currentChapter
-              ? html`
-						<div class="chapter-container">
-							${
-                this.diffMode
-                  ? html`
-								<wa-split-panel position="50">
-									<div slot="start" style="height: 100%; display: flex; flex-direction: column;">
-										<div class="panel-label">RAW MTL</div>
-										<div class="chapter-content raw-content">${unsafeHTML(currentChapter.originalContent || 'No original content')}</div>
+				<!-- Column 3: Reader & Console -->
+				<div class="column reader-col">
+					<div class="reader-area" style="${this.diffMode ? 'overflow:hidden; display:flex; flex-direction:column;' : ''}">
+						${currentChapter ? html`
+							<div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-shrink:0;">
+								<h1 style="margin:0;">${currentChapter.title}</h1>
+								<wa-button size="small" @click=${() => (this.diffMode = !this.diffMode)}>
+									<wa-icon src="/src/icons/list-search.svg" slot="prefix"></wa-icon>
+									${this.diffMode ? 'Refined View' : 'Diff View'}
+								</wa-button>
+							</div>
+							
+							${this.diffMode ? html`
+								<wa-split-panel position="50" style="flex:1; min-height:0;">
+									<div slot="start" style="padding: var(--wa-space-m); height:100%; overflow:auto;">
+										<div style="font-weight:bold; color:var(--wa-color-text-quiet); margin-bottom:1rem;">RAW MTL</div>
+										<div class="chapter-content" style="color: var(--wa-color-text-quiet); font-size: 0.9rem;">${unsafeHTML(currentChapter.originalContent || '')}</div>
 									</div>
-									<div slot="end" style="height: 100%; display: flex; flex-direction: column;">
-										<div class="panel-label">REFINED PROSE</div>
+									<div slot="end" style="padding: var(--wa-space-m); height:100%; overflow:auto;">
+										<div style="font-weight:bold; color:var(--wa-color-brand-60); margin-bottom:1rem;">REFINED</div>
 										<div class="chapter-content">${unsafeHTML(currentChapter.content)}</div>
 									</div>
 								</wa-split-panel>
-							`
-                  : html`
-								<wa-card style="height: 100%; overflow: auto;">
-									<div slot="header">
-										<strong>${currentChapter.title}</strong>
-									</div>
-									<div class="chapter-content">${unsafeHTML(currentChapter.content)}</div>
-								</wa-card>
-							`
-              }
-						</div>
-					`
-              : html`
-						<div style="text-align: center; margin-top: 100px; color: var(--wa-color-text-quiet);">
-							<wa-icon name="book-open" style="font-size: 4rem; display: block; margin-bottom: 1rem;"></wa-icon>
-							<p>Upload an EPUB file to start refining.</p>
-						</div>
-					`
-          }
-
-					${
-            this.isProcessing
-              ? html`
-						<div class="progress-container">
-							<div class="progress-info">
-								<span>${this.statusMessage}</span>
-								<span>${this.totalSteps > 0 ? `${this.currentStep}/${this.totalSteps}` : ''}</span>
+							` : html`
+								<div class="chapter-content">${unsafeHTML(currentChapter.content)}</div>
+							`}
+						` : html`
+							<div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--wa-color-text-quiet);">
+								<wa-icon src="/src/icons/list-search.svg" style="font-size: 5rem; margin-bottom: 1rem; opacity: 0.2;"></wa-icon>
+								<p>Select a chapter to start reading</p>
 							</div>
-							<wa-progress-bar value=${this.progress} ?indeterminate=${this.progress === 0}></wa-progress-bar>
-							<div class="progress-info" style="justify-content: flex-end; margin-top: -2px;">
-								<span>${Math.round(this.progress)}%</span>
-							</div>
-						</div>
-					`
-              : ''
-          }
-
-					<div class="console">
-						<div style="font-weight: bold; margin-bottom: 4px; border-bottom: 1px solid #444;">Process Console</div>
-						${this.logs.map(
-              log => html`
-							<div class="log-entry log-${log.type}">
-								[${log.timestamp}] ${log.message}
-							</div>
-						`,
-            )}
-						${this.logs.length === 0 ? html`<div>Waiting for activity...</div>` : ''}
+						`}
 					</div>
-				</main>
-			</wa-page>
+					
+					<div class="console-area">
+						<div class="console-header">PROCESS CONSOLE</div>
+						<div class="console-logs">
+							${this.logs.map(log => html`
+								<div class="log-entry log-${log.type}">
+									[${log.timestamp}] ${log.message}
+								</div>
+							`)}
+							${this.logs.length === 0 ? html`<div>Waiting for activity...</div>` : ''}
+						</div>
+					</div>
+				</div>
+
+				<!-- Column 4: Services -->
+				<div class="column">
+					<div class="sticky-header">
+						<div class="header-title">SERVICES</div>
+					</div>
+					<div class="scroll-content">
+						<wa-card class="service-card">
+							<div slot="header">Local AI Settings</div>
+							<wa-button size="small" @click=${this.handleTestAi} style="width:100%;">
+								<wa-icon name="plug-circle-bolt" slot="prefix"></wa-icon> Test Connection (5004)
+							</wa-button>
+						</wa-card>
+
+						<wa-card class="service-card">
+							<div slot="header">1. Content Cleanup</div>
+							<p style="font-size: var(--wa-font-size-xs); margin-bottom: var(--wa-space-s);">Remove non-story pages (Covers, TOC, Copyright).</p>
+							<wa-button size="small" variant="brand" style="width:100%;" @click=${this.handleCleanup} ?disabled=${this.isProcessing || this.chapters.length === 0}>
+								<wa-icon name="broom" slot="prefix"></wa-icon> Run Cleanup
+							</wa-button>
+						</wa-card>
+
+						<wa-card class="service-card">
+							<div slot="header">2. Glossary Extraction</div>
+							<p style="font-size: var(--wa-font-size-xs); margin-bottom: var(--wa-space-s);">Automatically extract names and terms from the first 5 chapters.</p>
+							<wa-button size="small" variant="brand" style="width:100%;" @click=${this.handleExtractNames} ?disabled=${this.isProcessing || this.chapters.length === 0}>
+								<wa-icon name="wand-magic-sparkles" slot="prefix"></wa-icon> Extract Terms
+							</wa-button>
+						</wa-card>
+
+						<wa-card class="service-card">
+							<div slot="header">3. Full Refinement</div>
+							<p style="font-size: var(--wa-font-size-xs); margin-bottom: var(--wa-space-s);">Polish all chapters using the current glossary.</p>
+							<wa-button size="small" variant="success" style="width:100%;" @click=${this.handleRefineAll} ?disabled=${this.isProcessing || this.chapters.length === 0}>
+								<wa-icon name="sparkles" slot="prefix"></wa-icon> Refine All
+							</wa-button>
+						</wa-card>
+					</div>
+
+					<div class="sticky-footer">
+						<div class="progress-text">
+							<span>${this.statusMessage || 'System Idle'}</span>
+							<span>
+								${this.totalSteps > 0 
+									? html`Analysed: ${this.currentStep} | Remaining: ${this.totalSteps - this.currentStep}` 
+									: ''}
+							</span>
+						</div>
+						<wa-progress-bar value=${this.progress} ?indeterminate=${this.isProcessing && this.progress === 0}></wa-progress-bar>
+					</div>
+				</div>
+			</div>
+
+			<!-- Glossary Edit Dialog -->
+			<wa-dialog label=${this.editingEntry?.term ? 'Edit Entry' : 'Add Entry'} ?open=${this.isGlossaryDialogOpen} @wa-after-hide=${() => (this.isGlossaryDialogOpen = false)}>
+				${this.editingEntry ? html`
+					<div style="display:flex; flex-direction:column; gap: var(--wa-space-m);">
+						<wa-input label="Replacement Term" value=${this.editingEntry.term} @wa-input=${(e: any) => this.editingEntry!.term = e.target.value}></wa-input>
+						
+						<div>
+							<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+								<label style="font-size:var(--wa-font-size-s); font-weight:bold;">Search Patterns (Regex supported)</label>
+								<wa-button size="extra-small" @click=${() => {
+                  this.editingEntry!.searches = [...this.editingEntry!.searches, ''];
+                  this.requestUpdate();
+                }}>+ Add</wa-button>
+							</div>
+							${this.editingEntry.searches.map((s, i) => html`
+								<div style="display:flex; gap:4px; margin-bottom:4px;">
+									<wa-input style="flex:1;" value=${s} @wa-input=${(e: any) => this.editingEntry!.searches[i] = e.target.value}></wa-input>
+									<wa-button size="small" variant="danger" ghost @click=${() => {
+                    this.editingEntry!.searches = this.editingEntry!.searches.filter((_, idx) => idx !== i);
+                    this.requestUpdate();
+                  }}>
+										<wa-icon src="/src/icons/trash.svg"></wa-icon>
+									</wa-button>
+								</div>
+							`)}
+						</div>
+
+						<wa-select label="Category" value=${this.editingEntry.category} @wa-change=${(e: any) => this.editingEntry!.category = e.target.value}>
+							<wa-option value="Name">Name</wa-option>
+							<wa-option value="Place">Place</wa-option>
+							<wa-option value="Term">Term</wa-option>
+							<wa-option value="Other">Other</wa-option>
+						</wa-select>
+					</div>
+				` : ''}
+				<wa-button slot="footer" variant="brand" @click=${this.handleSaveGlossary}>Save Entry</wa-button>
+			</wa-dialog>
 		`;
   }
 }

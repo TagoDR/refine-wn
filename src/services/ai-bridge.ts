@@ -152,7 +152,7 @@ export class AiBridge {
 Focus on Xianxia/Wuxia/LitRPG terminology.
 Identify "Name-Patterns" (e.g., [Surname] [Title], Sect names).
 Suggest "High Fantasy" alternatives for literal MTL translations.
-Output ONLY a JSON array of objects: [{"original": "...", "translated": "...", "category": "...", "phonetic": "..."}]`;
+Output ONLY a JSON array of objects: [{"term": "Refined Name", "searches": ["MTL Name 1", "MTL Name 2"], "category": "Name"}]`;
 
     return this.callAi(`Extract entities from this text:\n\n${text}`, systemPrompt, false);
   }
@@ -165,7 +165,7 @@ Output ONLY a JSON array of objects: [{"original": "...", "translated": "...", "
 Remove MTL artifacts (e.g., "This seat," "The crowd was shocked").
 Maintain a consistent tone (Epic/Serious or LitRPG/System-focused).
 Strip out double chapter titles and editor notes.
-APPLY THIS GLOSSARY STRICTLY:
+APPLY THIS GLOSSARY STRICTLY. Each entry has a "term" (the final word to use) and "searches" (the list of MTL/raw words to be replaced by that term):
 ${glossaryContext}
 
 Output ONLY the refined chapter prose.`;

@@ -2,16 +2,15 @@ import { get, set } from 'idb-keyval';
 
 export interface GlossaryEntry {
   id: string;
-  original: string;
-  translated: string;
-  phonetic: string;
+  term: string; // The replacement text
+  searches: string[]; // List of strings or regex patterns
   category: 'Name' | 'Place' | 'Term' | 'Other';
   notes?: string;
 }
 
 export class GlossaryManager {
   private entries: Map<string, GlossaryEntry> = new Map();
-  private readonly STORAGE_KEY = 'refinewn-glossary';
+  private readonly STORAGE_KEY = 'refinewn-glossary-v2'; // Bumped version for new schema
 
   /**
    * Loads the glossary from IndexedDB.
@@ -52,19 +51,37 @@ export class GlossaryManager {
   }
 
   /**
-   * Exports the glossary to a JSON string.
+   * Exports the glossary to a dictionary-style JSON string for .json files.
+   * Format: { "Replacement": ["Search1", "Search2"] }
    */
   exportJson(): string {
-    return JSON.stringify(this.getAllEntries(), null, 2);
+    const dict: Record<string, string[]> = {};
+    for (const entry of this.entries.values()) {
+      dict[entry.term] = entry.searches;
+    }
+    return JSON.stringify(dict, null, 2);
   }
 
   /**
-   * Imports the glossary from a JSON string.
+   * Imports the glossary from a dictionary-style JSON string, appending to existing entries.
    */
   importJson(json: string): void {
-    const parsed = JSON.parse(json) as GlossaryEntry[];
-    for (const entry of parsed) {
-      this.upsertEntry(entry);
+    try {
+      const dict = JSON.parse(json) as Record<string, string[]>;
+      for (const [term, searches] of Object.entries(dict)) {
+        // Find existing entry by term to avoid duplicates, or create new
+        const existing = Array.from(this.entries.values()).find(e => e.term === term);
+        const entry: GlossaryEntry = {
+          id: existing?.id || crypto.randomUUID(),
+          term: term,
+          searches: Array.from(new Set([...(existing?.searches || []), ...searches])),
+          category: existing?.category || 'Other'
+        };
+        this.upsertEntry(entry);
+      }
+    } catch (e) {
+      console.error('Failed to import glossary JSON:', e);
+      throw e;
     }
   }
 }

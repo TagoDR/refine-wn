@@ -109,20 +109,84 @@ export class EpubService {
   }
 
   /**
-   * Saves changes back to an EPUB Blob
+   * Saves changes back to an EPUB Blob, removing any chapters not in the provided list.
    */
   async save(updatedChapters: Chapter[]): Promise<Blob> {
     if (!this.zip) throw new Error('EPUB not loaded');
 
     const newZip = new JSZip();
+    const updatedChapterIds = new Set(updatedChapters.map(c => c.id));
+    const updatedChapterHrefs = new Set(updatedChapters.map(c => c.href));
 
-    // Copy all existing files
+    // 1. Update the .opf file (Manifest & Spine)
+    const opfDoc = await this.readXmlFile(this.opfPath);
+    
+    // Filter/Update Manifest
+    const manifest = opfDoc.querySelector('manifest');
+    if (manifest) {
+      // First, remove ones not in our updated list
+      const items = Array.from(manifest.querySelectorAll('item'));
+      for (const item of items) {
+        const id = item.getAttribute('id');
+        const mediaType = item.getAttribute('media-type');
+        if (id && mediaType === 'application/xhtml+xml' && !updatedChapterIds.has(id)) {
+          item.remove();
+        }
+      }
+
+      // Then, add missing ones
+      for (const chapter of updatedChapters) {
+        if (!manifest.querySelector(`item[id="${chapter.id}"]`)) {
+          const item = opfDoc.createElement('item');
+          item.setAttribute('id', chapter.id);
+          item.setAttribute('href', chapter.href);
+          item.setAttribute('media-type', 'application/xhtml+xml');
+          manifest.appendChild(item);
+        }
+      }
+    }
+
+    // Filter/Update Spine
+    const spine = opfDoc.querySelector('spine');
+    if (spine) {
+      // Clear spine and rebuild to ensure order matches our state
+      const itemrefs = Array.from(spine.querySelectorAll('itemref'));
+      for (const itemref of itemrefs) {
+        itemref.remove();
+      }
+
+      for (const chapter of updatedChapters) {
+        const itemref = opfDoc.createElement('itemref');
+        itemref.setAttribute('idref', chapter.id);
+        spine.appendChild(itemref);
+      }
+    }
+
+    const updatedOpfContent = '<?xml version="1.0" encoding="UTF-8"?>\n' + opfDoc.documentElement.outerHTML;
+
+    // 2. Build the new ZIP
     for (const [path, file] of Object.entries(this.zip.files)) {
+      if (path === this.opfPath) {
+        newZip.file(path, updatedOpfContent);
+        continue;
+      }
+
+      // Check if this path is a chapter file
+      const relativePath = path.startsWith(this.rootDir) ? path.substring(this.rootDir.length) : path;
+      
+      // If it's a chapter file (XHTML) and not in our href list, skip it
+      // We check for .xhtml or .html to be safe, and verify it's under rootDir
+      if (path.startsWith(this.rootDir) && (path.endsWith('.xhtml') || path.endsWith('.html'))) {
+         if (!updatedChapterHrefs.has(relativePath)) {
+           continue; // Skip trashed chapter file
+         }
+      }
+
       const content = await file.async('uint8array');
       newZip.file(path, content);
     }
 
-    // Update modified chapters
+    // 3. Update the content for the remaining chapters
     for (const chapter of updatedChapters) {
       const fullPath = this.rootDir + chapter.href;
       newZip.file(fullPath, chapter.content);
