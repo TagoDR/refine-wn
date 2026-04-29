@@ -191,24 +191,22 @@ export class AiBridge {
   }
 
   /**
-   * Identify junk chapters like covers, TOC, copyright, source pages.
+   * Identify if a single chapter is junk.
    */
-  async identifyJunkChapters(
-    chapters: { id: string; title: string; snippet: string }[],
-  ): Promise<string[]> {
-    const input = chapters
-      .map(c => `ID: ${c.id} | Title: ${c.title} | Snippet: ${c.snippet.substring(0, 300)}`)
-      .join('\n---\n');
+  async isJunkChapter(chapter: { id: string; title: string; snippet: string }): Promise<{ remove: boolean; reason?: string }> {
+    const input = `Title: ${chapter.title}\nSnippet: ${chapter.snippet.substring(0, 500)}`;
+    const prompt = contentFilterPrompt.replace('{{input}}', input);
+    
     try {
-      const response = await this.callAi(input, contentFilterPrompt, false);
-      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      const response = await this.callAi(prompt, 'You are a helpful assistant that only outputs valid JSON.', false);
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);
       }
-      return [];
+      return { remove: false };
     } catch (error) {
-      this.log(`Cleanup identification failed: ${error}`, 'error');
-      return [];
+      this.log(`Failed to analyze chapter ${chapter.title}: ${error}`, 'error');
+      return { remove: false };
     }
   }
 }

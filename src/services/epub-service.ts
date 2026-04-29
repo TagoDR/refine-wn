@@ -6,6 +6,7 @@ export interface Chapter {
   title: string;
   href: string;
   content: string;
+  source?: string;
   originalContent?: string;
 }
 

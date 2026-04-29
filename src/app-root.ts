@@ -347,10 +347,11 @@ export class AppRoot extends LitElement {
     this.addLog('info', `Importing EPUB: ${file.name}`);
     try {
       const result = await this.epubClient.load(file);
-      // Additive import: append chapters with unique IDs
+      // Additive import: append chapters with unique IDs and source tracking
       const newChapters = result.chapters.map(ch => ({
         ...ch,
-        id: `${file.name.replace(/\s+/g, '_')}-${ch.id}`
+        id: `${file.name.replace(/\s+/g, '_')}-${ch.id}`,
+        source: file.name
       }));
       this.chapters = [...this.chapters, ...newChapters];
       this.metadata = result.metadata;
@@ -455,27 +456,99 @@ export class AppRoot extends LitElement {
   private async handleCleanup() {
     if (this.chapters.length === 0) return;
     this.isProcessing = true;
+    this.isPaused = false;
     this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
+    
     try {
-      this.statusMessage = 'Identifying junk chapters...';
-      const chapterData = this.chapters.map(ch => ({
-        id: ch.id,
-        title: ch.title,
-        snippet: this.textCleaner.clean(ch.content).substring(0, 500),
-      }));
-      const idsToRemove = await this.aiBridge.identifyJunkChapters(chapterData);
-      if (idsToRemove.length > 0) {
-        this.chapters = this.chapters.filter(ch => !idsToRemove.includes(ch.id));
-        this.addLog('success', `Removed ${idsToRemove.length} junk chapters.`);
-      } else {
-        this.addLog('info', 'No junk chapters found.');
+      this.currentStep = 0;
+      // 1. Group chapters by source (EPUB)
+      const groups = new Map<string, Chapter[]>();
+      for (const ch of this.chapters) {
+        const source = ch.source || 'Unknown';
+        if (!groups.has(source)) groups.set(source, []);
+        groups.get(source)!.push(ch);
       }
+
+      this.totalSteps = this.chapters.length;
+      let processedCount = 0;
+      const idsToRemove = new Set<string>();
+
+      // 2. Process each EPUB group
+      for (const [source, bookChapters] of groups.entries()) {
+        if (this.isPaused) break;
+        this.addLog('info', `Cleaning up EPUB: ${source}`);
+
+        // Forward Scan
+        for (let i = 0; i < bookChapters.length; i++) {
+          if (this.isPaused) break;
+          const ch = bookChapters[i];
+          this.statusMessage = `Analyzing (Start): ${ch.title}`;
+          const isJunk = await this.checkIfJunk(ch);
+          processedCount++;
+          this.progress = (processedCount / this.totalSteps) * 100;
+
+          if (isJunk) {
+            idsToRemove.add(ch.id);
+          } else {
+            this.addLog('info', `Found valid start chapter for ${source}: ${ch.title}`);
+            break; // Stop forward scan for this book
+          }
+        }
+
+        // Backward Scan
+        for (let i = bookChapters.length - 1; i >= 0; i--) {
+          if (this.isPaused) break;
+          const ch = bookChapters[i];
+          if (idsToRemove.has(ch.id)) continue; // Already marked in forward scan (e.g. if book is all junk)
+
+          this.statusMessage = `Analyzing (End): ${ch.title}`;
+          const isJunk = await this.checkIfJunk(ch);
+          processedCount++;
+          // Since we might skip chapters already checked, we need to adjust progress or just accept it's an estimate
+          // Actually, we should count every AI call as a step.
+          this.progress = (processedCount / this.totalSteps) * 100;
+
+          if (isJunk) {
+            idsToRemove.add(ch.id);
+          } else {
+            this.addLog('info', `Found valid end chapter for ${source}: ${ch.title}`);
+            break; // Stop backward scan for this book
+          }
+        }
+      }
+
+      if (idsToRemove.size > 0) {
+        this.chapters = this.chapters.filter(ch => !idsToRemove.has(ch.id));
+        this.addLog('success', `Cleanup complete. Removed ${idsToRemove.size} junk chapters.`);
+        if (this.selectedChapterIndex >= this.chapters.length) {
+          this.selectedChapterIndex = this.chapters.length > 0 ? 0 : -1;
+        }
+      } else {
+        this.addLog('success', 'Cleanup complete. No junk chapters found at boundaries.');
+      }
+      this.progress = 100;
     } catch (error) {
       this.addLog('error', `Cleanup failed: ${error}`);
     } finally {
       this.isProcessing = false;
       this.statusMessage = '';
+      this.progress = 0;
     }
+  }
+
+  private async checkIfJunk(ch: Chapter): Promise<boolean> {
+    this.currentStep++;
+    const result = await this.aiBridge.isJunkChapter({
+      id: ch.id,
+      title: ch.title,
+      snippet: this.textCleaner.clean(ch.content).substring(0, 500),
+    });
+
+    if (result.remove) {
+      this.addLog('info', `Junk identified: ${ch.title} (${result.reason || 'No reason provided'})`);
+      return true;
+    }
+    return false;
   }
 
   private async handleExtractNames() {
