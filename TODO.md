@@ -1,43 +1,51 @@
-# Task Roadmap - NovellaRefine
+# Task Roadmap - RefineWN (4-Column Layout Overhaul)
 
-## Phase 1: Foundation (The Skeleton)
+This roadmap tracks the transition from a standard sidebar layout to a specialized 4-column workstation for high-efficiency WebNovel refinement.
 
-- [x] Clean Up Webstorm default Lit project. Update dependencies, specially typescript to above version 7. (Updated to TS 6.0.3, latest stable available).
-- [x] Initialize Vite + Lit + TypeScript project.
-- [x] Configure `.biome.json` for strict linting.
-- [x] Implement `Layout` component using WebAwesome (Sidebar for chapters, Main area for text).
-- [x] Setup `idb-keyval` for persistent storage of project settings.
+## Phase 6: 4-Column UI Restructure (The Workstation)
 
-## Phase 2: The EPUB Engine (I/O)
+- [ ] **Infrastructure: Grid Layout Implementation**
+  - [ ] Implement `.app-grid` CSS grid (250px | 300px | 1fr | 250px).
+  - [ ] Ensure full viewport height (100vh) and no global scrolling.
+  - [ ] Implement responsive column resizing or fixed widths as per plan.
 
-- [x] Create `EpubService` using `jszip`.
-- [x] Task: Parse `META-INF/container.xml` to find the root `.opf` file.
-- [x] Task: Extract Chapter list (TOC) and map to XHTML files.
-- [x] Task: Build "Save to EPUB" function (reassembling the ZIP). (Implemented in a Web Worker for efficiency).
+- [ ] **Column 1: File & Chapter Management**
+  - [ ] Create sticky header with `[Open]`, `[Close]`, and `[Save]` buttons.
+  - [ ] Implement `Close` functionality (clear chapters, metadata, and state).
+  - [ ] Implement `Save` functionality (export current session as .epub).
+  - [ ] Refactor Chapter List to include a "Trash" icon per chapter.
+  - [ ] Implement "Trash" logic (remove from current session array).
 
-## Phase 3: The Refinement Pipeline
+- [ ] **Column 2: Enhanced Glossary Management**
+  - [ ] Create sticky header with `[Import]`, `[Export]`, and `[Add]` buttons.
+  - [ ] Implement `importTxt` and `exportTxt` (JSON structure wrapped in .txt).
+  - [ ] Update `GlossaryEntry` model to support one-to-many searches (`term` + `searches[]`).
+  - [ ] Implement Glossary Edit Modal (`wa-dialog`):
+    - [ ] Dynamic search term list (add/remove search strings/regex).
+    - [ ] Replacement term input.
+  - [ ] Render glossary list with easy access to edit/delete actions.
 
-- [x] Implement `TextCleaner` class:
-  - [x] Filter: Remove consecutive blank lines.
-  - [x] Filter: Detect and strip specific editor commentary tags.
-  - [x] Filter: Normalize scene dividers (`***`, `---`).
-- [x] Implement `GlossaryManager`:
-  - [x] Import/Export JSON functionality.
-  - [x] UI for editing "Original vs Translated vs Phonetic".
-- [x] Implement AI-powered "Cleanup" to remove covers, TOC, and source pages.
+- [ ] **Column 3: Reader & Console**
+  - [ ] Top: Implement scrollable Reader view for the selected chapter.
+  - [ ] Bottom: Implement fixed-height (or resizable) Process Console.
+  - [ ] Ensure "Diff View" still works within the Reader section.
 
-## Phase 4: Local AI Integration
+- [ ] **Column 4: Service Orchestration & Progress**
+  - [ ] List available services (Cleanup, Glossary Extraction, Refinement).
+  - [ ] Implement "Service Action" buttons with clear descriptions.
+  - [ ] Create sticky footer for the global progress bar.
+  - [ ] Update progress bar to show `Analyzed: X / Total: Y` chapters.
 
-- [x] Create `AiBridge` for LM Studio/Ollama connectivity (Port 5004).
-- [x] Develop "Name Extraction" prompt to pre-fill the glossary.
-- [x] Develop "Chapter Refinement" prompt with context injection.
-- [x] UI: Progress bar and integrated Process Console for activity logging.
+## Phase 7: Service Logic Updates
 
-## Phase 5: Polish & UX
+- [ ] **Refinement Pipeline Integration**
+  - [ ] Update `AiBridge` to utilize the new one-to-many glossary structure.
+  - [ ] Ensure Regex-based replacement logic is integrated into the prompt or pre-processing.
+  - [ ] Optimize the "Trash" system to ensure excluded chapters are not processed or saved.
 
-- [x] Add "Diff View" to compare raw MTL vs AI-refined text. (Using `wa-split-panel`).
-- [x] Implement dark mode theme using WebAwesome design tokens.
-- [x] Move global actions to Header for better ergonomics and accessibility.
-- [x] Automatic loading of test EPUB for faster development.
-- [~] Removed TTS feature to focus on core prose refinement.
-- [x] Final optimization for local GPU processing via LM Studio.
+## Phase 8: Final Validation
+
+- [ ] **Cross-Browser testing** (Chrome/Edge/Firefox).
+- [ ] **Large File performance** (Testing with 100+ chapters).
+- [ ] **Memory Management** (Ensuring Blob/URL objects are revoked).
+- [ ] **Glossary Regex validation** (Preventing infinite loops or catastrophic backtracking).
