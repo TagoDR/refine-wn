@@ -115,6 +115,10 @@ export class AppRoot extends LitElement {
 			gap: 4px;
 		}
 
+		.glossary-item:hover {
+			background: var(--wa-color-surface-lowered);
+		}
+
 		.glossary-term {
 			font-weight: bold;
 			color: var(--wa-color-brand-60);
@@ -124,6 +128,17 @@ export class AppRoot extends LitElement {
 			font-size: var(--wa-font-size-2xs);
 			color: var(--wa-color-text-quiet);
 			font-style: italic;
+		}
+
+		.glossary-actions {
+			display: flex;
+			align-items: center;
+			gap: var(--wa-space-3xs);
+		}
+
+		.glossary-icon-btn {
+			--wa-font-size-xs: 0.75rem;
+			color: var(--wa-color-text-quiet);
 		}
 
 		/* Column 3: Reader & Console */
@@ -253,6 +268,26 @@ export class AppRoot extends LitElement {
     this.currentConfig = await this.configService.load();
     await this.glossaryManager.load();
     this.storyMemory = await this.storyMemoryService.load();
+    
+    // Auto-load test glossary for faster testing if empty
+    if (this.glossaryManager.getAllEntries().length === 0) {
+      try {
+        const response = await fetch('/test/test-glossary.json');
+        if (response.ok) {
+          const testGlossary = await response.json();
+          for (const entry of testGlossary) {
+            this.glossaryManager.upsertEntry({
+              id: crypto.randomUUID(),
+              ...entry
+            } as any);
+          }
+          await this.glossaryManager.save();
+        }
+      } catch (_e) {
+        console.warn('Test glossary file not found, skipping auto-import.');
+      }
+    }
+
     this.glossaryEntries = this.glossaryManager.getAllEntries();
     await this.autoLoadTestEpub();
   }
@@ -461,9 +496,9 @@ export class AppRoot extends LitElement {
         this.progress = (i / total) * 100;
         const cleaned = this.textCleaner.clean(this.chapters[i].content);
         // Process in chunks if needed, but for extraction we usually just need the start
-        const json = await this.aiBridge.extractNames(cleaned.substring(0, 8000));
-        try {
-          const newEntries = JSON.parse(json);
+        const newEntries = await this.aiBridge.extractNames(cleaned.substring(0, 8000));
+        
+        if (newEntries && Array.isArray(newEntries)) {
           for (const entry of newEntries) {
             this.glossaryManager.upsertEntry({ 
               id: crypto.randomUUID(), 
@@ -473,8 +508,6 @@ export class AppRoot extends LitElement {
             });
           }
           this.glossaryEntries = this.glossaryManager.getAllEntries();
-        } catch (e) {
-          this.addLog('error', `Failed to parse AI output for ${this.chapters[i].title}`);
         }
       }
       await this.glossaryManager.save();
@@ -662,11 +695,9 @@ export class AppRoot extends LitElement {
 							<div class="glossary-item" @click=${() => this.openGlossaryDialog(entry)} style="cursor: pointer;">
 								<div style="display:flex; justify-content:space-between; align-items:flex-start;">
 									<div class="glossary-term">${entry.term}</div>
-									<div style="display:flex; gap:4px;">
-										<wa-icon src="/src/icons/edit.svg" style="font-size: var(--wa-font-size-xs); color: var(--wa-color-text-quiet);"></wa-icon>
-										<wa-button size="extra-small" variant="danger" ghost @click=${(e: Event) => this.handleDeleteGlossary(entry.id, e)}>
-											<wa-icon src="/src/icons/trash.svg" style="font-size: var(--wa-font-size-xs);"></wa-icon>
-										</wa-button>
+									<div class="glossary-actions">
+										<wa-icon-button src="/src/icons/edit.svg" label="Edit" class="glossary-icon-btn"></wa-icon-button>
+										<wa-icon-button src="/src/icons/trash.svg" label="Delete" class="glossary-icon-btn" style="color: var(--wa-color-danger-60);" @click=${(e: Event) => this.handleDeleteGlossary(entry.id, e)}></wa-icon-button>
 									</div>
 								</div>
 								<div class="glossary-searches">${entry.searches.join(', ')}</div>

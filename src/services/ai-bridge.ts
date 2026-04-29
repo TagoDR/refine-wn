@@ -138,8 +138,34 @@ export class AiBridge {
   /**
    * Prompt for Name Extraction (The Glossary Architect)
    */
-  async extractNames(text: string): Promise<string> {
-    return this.callAi(`Extract entities from this text:\n\n${text}`, glossaryArchitectPrompt, false);
+  async extractNames(text: string): Promise<any[]> {
+    if (!glossaryArchitectPrompt) {
+      this.log('Glossary Architect prompt is missing or empty!', 'error');
+      return [];
+    }
+
+    this.log('Extracting names from chapter...', 'info');
+    const prompt = glossaryArchitectPrompt.replace('{{text}}', text);
+    const response = await this.callAi(prompt, 'You are a helpful assistant that only outputs valid JSON.', false);
+    
+    try {
+      // Find JSON block or array
+      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        const data = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(data)) {
+          this.log(`Extracted ${data.length} terms.`, 'success');
+          return data;
+        }
+      }
+      this.log('No JSON array found in AI response.', 'error');
+      console.log('AI Raw Response:', response);
+      return [];
+    } catch (error) {
+      this.log(`Failed to parse Glossary AI output: ${error}`, 'error');
+      console.error('Glossary AI Parse Error. Raw response:', response);
+      return [];
+    }
   }
 
   /**
@@ -175,10 +201,9 @@ export class AiBridge {
       .join('\n---\n');
     try {
       const response = await this.callAi(input, contentFilterPrompt, false);
-      // Try to parse the array from the response
-      const match = response.match(/\[.*\]/s);
-      if (match) {
-        return JSON.parse(match[0]);
+      const jsonMatch = response.match(/\[[\s\S]*\]/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
       }
       return [];
     } catch (error) {
