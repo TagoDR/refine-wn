@@ -2,10 +2,13 @@ import { css, html, LitElement } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { AiBridge } from './services/ai-bridge';
+import { ConfigService, type AppConfig } from './services/config-service';
 import type { Chapter, EpubMetadata } from './services/epub-service';
 import { EpubWorkerClient } from './services/epub-worker-client';
 import { type GlossaryEntry, GlossaryManager } from './services/glossary-manager';
+import { StoryMemoryService } from './services/story-memory';
 import { TextCleaner } from './services/text-cleaner';
+import { splitText } from './services/text-splitter';
 
 @customElement('app-root')
 export class AppRoot extends LitElement {
@@ -209,6 +212,7 @@ export class AppRoot extends LitElement {
   @state() private selectedChapterIndex = -1;
   @state() private glossaryEntries: GlossaryEntry[] = [];
   @state() private isProcessing = false;
+  @state() private isPaused = false;
   @state() private progress = 0;
   @state() private currentStep = 0;
   @state() private totalSteps = 0;
@@ -223,29 +227,18 @@ export class AppRoot extends LitElement {
 
   // Dialog state
   @state() private isGlossaryDialogOpen = false;
+  @state() private isConfigDialogOpen = false;
+  @state() private isMemoryDialogOpen = false;
   @state() private editingEntry: GlossaryEntry | null = null;
+  @state() private currentConfig: AppConfig | null = null;
+  @state() private storyMemory = '';
 
   private epubClient = new EpubWorkerClient();
-  private aiBridge = new AiBridge();
+  private configService = new ConfigService();
+  private aiBridge = new AiBridge(this.configService);
   private glossaryManager = new GlossaryManager();
+  private storyMemoryService = new StoryMemoryService();
   private textCleaner = new TextCleaner();
-
-  private async handleTestAi() {
-    this.isProcessing = true;
-    this.addLog('info', 'Testing AI Connection (Port 5004)...');
-    try {
-      const success = await this.aiBridge.testConnection();
-      if (success) {
-        this.addLog('success', 'AI Connection Successful!');
-      } else {
-        this.addLog('error', 'AI Connection Failed. Check if LM Studio is running on port 5004.');
-      }
-    } catch (error) {
-      this.addLog('error', `AI Connection Error: ${error}`);
-    } finally {
-      this.isProcessing = false;
-    }
-  }
 
   private addLog(type: 'info' | 'error' | 'success', message: string) {
     const timestamp = new Date().toLocaleTimeString();
@@ -257,7 +250,9 @@ export class AppRoot extends LitElement {
   }
 
   async firstUpdated() {
+    this.currentConfig = await this.configService.load();
     await this.glossaryManager.load();
+    this.storyMemory = await this.storyMemoryService.load();
     this.glossaryEntries = this.glossaryManager.getAllEntries();
     await this.autoLoadTestEpub();
   }
@@ -271,6 +266,37 @@ export class AppRoot extends LitElement {
         await this.loadEpubFile(file);
       }
     } catch (_e) {}
+  }
+
+  private async handleTestAi() {
+    this.isProcessing = true;
+    this.addLog('info', 'Testing AI Connection...');
+    try {
+      const success = await this.aiBridge.testConnection();
+      if (success) {
+        this.addLog('success', 'AI Connection Successful!');
+      } else {
+        this.addLog('error', 'AI Connection Failed. Check settings and local server.');
+      }
+    } catch (error) {
+      this.addLog('error', `AI Connection Error: ${error}`);
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  private async handleSaveConfig() {
+    if (this.currentConfig) {
+      await this.configService.save(this.currentConfig);
+      this.addLog('success', 'AI Settings saved.');
+      this.isConfigDialogOpen = false;
+    }
+  }
+
+  private async handleSaveMemory() {
+    await this.storyMemoryService.save(this.storyMemory);
+    this.addLog('success', 'Story Memory updated.');
+    this.isMemoryDialogOpen = false;
   }
 
   private async handleFileUpload(e: Event) {
@@ -308,18 +334,19 @@ export class AppRoot extends LitElement {
     if (this.chapters.length === 0) return;
     this.isProcessing = true;
     this.addLog('info', 'Generating refined EPUB...');
+    let url = '';
     try {
       const blob = await this.epubClient.save(this.chapters);
-      const url = URL.createObjectURL(blob);
+      url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
       a.download = `refined_${this.metadata?.title || 'book'}.epub`;
       a.click();
-      URL.revokeObjectURL(url);
       this.addLog('success', 'EPUB saved successfully!');
     } catch (error) {
       this.addLog('error', `Save failed: ${error}`);
     } finally {
+      if (url) URL.revokeObjectURL(url);
       this.isProcessing = false;
     }
   }
@@ -419,28 +446,38 @@ export class AppRoot extends LitElement {
   private async handleExtractNames() {
     if (this.chapters.length === 0) return;
     this.isProcessing = true;
+    this.isPaused = false;
     this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
     try {
-      const limit = Math.min(this.chapters.length, 5);
+      const total = this.chapters.length;
       this.statusMessage = 'Extracting glossary entities...';
-      for (let i = 0; i < limit; i++) {
+      for (let i = 0; i < total; i++) {
+        if (this.isPaused) {
+          this.addLog('info', 'Extraction paused.');
+          break;
+        }
         this.currentStep = i + 1;
-        this.totalSteps = limit;
-        this.progress = (i / limit) * 100;
+        this.totalSteps = total;
+        this.progress = (i / total) * 100;
         const cleaned = this.textCleaner.clean(this.chapters[i].content);
-        const json = await this.aiBridge.extractNames(cleaned.substring(0, 4000));
-        const newEntries = JSON.parse(json);
-        for (const entry of newEntries) {
-          this.glossaryManager.upsertEntry({ 
-            id: crypto.randomUUID(), 
-            term: entry.term, 
-            searches: entry.searches || [],
-            category: entry.category || 'Other'
-          });
+        // Process in chunks if needed, but for extraction we usually just need the start
+        const json = await this.aiBridge.extractNames(cleaned.substring(0, 8000));
+        try {
+          const newEntries = JSON.parse(json);
+          for (const entry of newEntries) {
+            this.glossaryManager.upsertEntry({ 
+              id: crypto.randomUUID(), 
+              term: entry.term, 
+              searches: entry.searches || [],
+              category: entry.category || 'Other'
+            });
+          }
+          this.glossaryEntries = this.glossaryManager.getAllEntries();
+        } catch (e) {
+          this.addLog('error', `Failed to parse AI output for ${this.chapters[i].title}`);
         }
       }
       await this.glossaryManager.save();
-      this.glossaryEntries = this.glossaryManager.getAllEntries();
       this.addLog('success', 'Glossary extraction complete.');
     } catch (error) {
       this.addLog('error', `Extraction error: ${error}`);
@@ -450,21 +487,61 @@ export class AppRoot extends LitElement {
     }
   }
 
+  private async handleRefineIndividual(index: number) {
+    if (this.isProcessing) return;
+    this.isProcessing = true;
+    this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
+    try {
+      this.statusMessage = `Refining: ${this.chapters[index].title}`;
+      const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
+      let refined = await this.processRefinement(this.chapters[index].content, glossaryContext);
+      
+      // Strict Glossary Post-Process
+      this.statusMessage = 'Applying strict glossary...';
+      refined = this.glossaryManager.applyGlossary(refined);
+
+      this.chapters[index] = { ...this.chapters[index], content: refined };
+      this.chapters = [...this.chapters];
+      this.addLog('success', `Chapter refined: ${this.chapters[index].title}`);
+    } catch (error) {
+      this.addLog('error', `Refinement failed: ${error}`);
+    } finally {
+      this.isProcessing = false;
+      this.statusMessage = '';
+    }
+  }
+
   private async handleRefineAll() {
     if (this.chapters.length === 0) return;
     this.isProcessing = true;
+    this.isPaused = false;
     this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
     try {
       const total = this.chapters.length;
       this.totalSteps = total;
       const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
+      
       for (let i = 0; i < total; i++) {
+        if (this.isPaused) {
+          this.addLog('info', 'Refinement paused.');
+          break;
+        }
         this.currentStep = i + 1;
         this.progress = (i / total) * 100;
         this.statusMessage = `Refining: ${this.chapters[i].title}`;
-        const cleaned = this.textCleaner.clean(this.chapters[i].content);
-        const refined = await this.aiBridge.refineChapter(cleaned, glossaryContext);
+        
+        let refined = await this.processRefinement(this.chapters[i].content, glossaryContext);
+
+        // Strict Glossary Post-Process
+        refined = this.glossaryManager.applyGlossary(refined);
+
         this.chapters[i] = { ...this.chapters[i], content: refined };
+        
+        // Update memory after each chapter
+        this.statusMessage = `Updating memory: ${this.chapters[i].title}`;
+        this.storyMemory = await this.aiBridge.updateMemory(refined, this.storyMemory);
+        await this.storyMemoryService.save(this.storyMemory);
+
         if (i % 2 === 0) this.chapters = [...this.chapters];
       }
       this.chapters = [...this.chapters];
@@ -475,6 +552,20 @@ export class AppRoot extends LitElement {
       this.isProcessing = false;
       this.progress = 0;
     }
+  }
+
+  private async processRefinement(rawContent: string, glossaryContext: string): Promise<string> {
+    const config = this.configService.getConfig();
+    const cleaned = this.textCleaner.clean(rawContent);
+    const chunks = splitText(cleaned, config.ai.maxContext - 2000); // Leave room for prompts
+    
+    let refinedContent = '';
+    for (let j = 0; j < chunks.length; j++) {
+      this.addLog('info', `Processing chunk ${j + 1}/${chunks.length}...`);
+      const chunkRefined = await this.aiBridge.refineChapter(chunks[j], glossaryContext, this.storyMemory);
+      refinedContent += chunkRefined + '\n\n';
+    }
+    return refinedContent.trim();
   }
 
   private async handleClearGlossary() {
@@ -526,12 +617,17 @@ export class AppRoot extends LitElement {
 					<div class="scroll-content">
 						${this.chapters.map((ch, i) => html`
 							<div class="chapter-item ${this.selectedChapterIndex === i ? 'selected' : ''}" @click=${() => (this.selectedChapterIndex = i)}>
-								<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+								<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
 									${ch.title || `Chapter ${i + 1}`}
 								</span>
-								<wa-button class="trash-btn" size="extra-small" variant="danger" ghost @click=${(e: Event) => this.handleTrashChapter(i, e)}>
-									<wa-icon src="/src/icons/trash.svg"></wa-icon>
-								</wa-button>
+								<div style="display:flex; gap:2px;">
+									<wa-button size="extra-small" variant="neutral" ghost @click=${(e: Event) => { e.stopPropagation(); this.handleRefineIndividual(i); }} title="Refine Chapter">
+										<wa-icon src="/src/icons/list-search.svg"></wa-icon>
+									</wa-button>
+									<wa-button class="trash-btn" size="extra-small" variant="danger" ghost @click=${(e: Event) => this.handleTrashChapter(i, e)}>
+										<wa-icon src="/src/icons/trash.svg"></wa-icon>
+									</wa-button>
+								</div>
 							</div>
 						`)}
 						${this.chapters.length === 0 ? html`<div style="text-align:center; padding-top:2rem; color:var(--wa-color-text-quiet);">No book loaded</div>` : ''}
@@ -635,8 +731,18 @@ export class AppRoot extends LitElement {
 					<div class="scroll-content">
 						<wa-card class="service-card">
 							<div slot="header">Local AI Settings</div>
-							<wa-button size="small" @click=${this.handleTestAi} style="width:100%;">
-								<wa-icon name="plug-circle-bolt" slot="prefix"></wa-icon> Test Connection (5004)
+							<wa-button size="small" @click=${() => this.isConfigDialogOpen = true} style="width:100%;">
+								<wa-icon name="gear" slot="prefix"></wa-icon> Configure AI
+							</wa-button>
+							<wa-button size="small" variant="neutral" ghost @click=${this.handleTestAi} style="width:100%; margin-top:4px;">
+								<wa-icon name="plug-circle-bolt" slot="prefix"></wa-icon> Test Connection
+							</wa-button>
+						</wa-card>
+
+						<wa-card class="service-card">
+							<div slot="header">Narrative Context</div>
+							<wa-button size="small" @click=${() => this.isMemoryDialogOpen = true} style="width:100%;">
+								<wa-icon name="brain" slot="prefix"></wa-icon> Story Memory
 							</wa-button>
 						</wa-card>
 
@@ -650,7 +756,7 @@ export class AppRoot extends LitElement {
 
 						<wa-card class="service-card">
 							<div slot="header">2. Glossary Extraction</div>
-							<p style="font-size: var(--wa-font-size-xs); margin-bottom: var(--wa-space-s);">Automatically extract names and terms from the first 5 chapters.</p>
+							<p style="font-size: var(--wa-font-size-xs); margin-bottom: var(--wa-space-s);">Automatically extract names and terms from ALL chapters.</p>
 							<wa-button size="small" variant="brand" style="width:100%;" @click=${this.handleExtractNames} ?disabled=${this.isProcessing || this.chapters.length === 0}>
 								<wa-icon name="wand-magic-sparkles" slot="prefix"></wa-icon> Extract Terms
 							</wa-button>
@@ -658,7 +764,7 @@ export class AppRoot extends LitElement {
 
 						<wa-card class="service-card">
 							<div slot="header">3. Full Refinement</div>
-							<p style="font-size: var(--wa-font-size-xs); margin-bottom: var(--wa-space-s);">Polish all chapters using the current glossary.</p>
+							<p style="font-size: var(--wa-font-size-xs); margin-bottom: var(--wa-space-s);">Polish all chapters using glossary and memory.</p>
 							<wa-button size="small" variant="success" style="width:100%;" @click=${this.handleRefineAll} ?disabled=${this.isProcessing || this.chapters.length === 0}>
 								<wa-icon name="sparkles" slot="prefix"></wa-icon> Refine All
 							</wa-button>
@@ -675,9 +781,37 @@ export class AppRoot extends LitElement {
 							</span>
 						</div>
 						<wa-progress-bar value=${this.progress} ?indeterminate=${this.isProcessing && this.progress === 0}></wa-progress-bar>
+						
+						${this.isProcessing ? html`
+							<div style="display:flex; gap:4px; margin-top:8px;">
+								<wa-button size="small" variant="warning" style="flex:1;" @click=${() => this.isPaused = !this.isPaused}>
+									<wa-icon name=${this.isPaused ? 'play' : 'pause'} slot="prefix"></wa-icon>
+									${this.isPaused ? 'Resume' : 'Stop'}
+								</wa-button>
+							</div>
+						` : ''}
 					</div>
 				</div>
 			</div>
+
+			<!-- AI Config Dialog -->
+			<wa-dialog label="AI Settings" ?open=${this.isConfigDialogOpen} @wa-after-hide=${() => (this.isConfigDialogOpen = false)}>
+				${this.currentConfig ? html`
+					<div style="display:flex; flex-direction:column; gap: var(--wa-space-m);">
+						<wa-input label="Endpoint URL" value=${this.currentConfig.ai.endpoint} @wa-input=${(e: any) => this.currentConfig!.ai.endpoint = e.target.value}></wa-input>
+						<wa-input label="Model Name" value=${this.currentConfig.ai.model} @wa-input=${(e: any) => this.currentConfig!.ai.model = e.target.value}></wa-input>
+						<wa-input label="Max Context (tokens)" type="number" value=${this.currentConfig.ai.maxContext} @wa-input=${(e: any) => this.currentConfig!.ai.maxContext = Number(e.target.value)}></wa-input>
+						<wa-input label="Temperature" type="number" step="0.1" value=${this.currentConfig.ai.temperature} @wa-input=${(e: any) => this.currentConfig!.ai.temperature = Number(e.target.value)}></wa-input>
+					</div>
+				` : ''}
+				<wa-button slot="footer" variant="brand" @click=${this.handleSaveConfig}>Save Settings</wa-button>
+			</wa-dialog>
+
+			<!-- Story Memory Dialog -->
+			<wa-dialog label="Story Memory" ?open=${this.isMemoryDialogOpen} style="--width: 80vw;" @wa-after-hide=${() => (this.isMemoryDialogOpen = false)}>
+				<wa-textarea label="Current Narrative Context" rows="15" value=${this.storyMemory} @wa-input=${(e: any) => this.storyMemory = e.target.value} help-text="Main characters, descriptions, items, and current plot summary."></wa-textarea>
+				<wa-button slot="footer" variant="brand" @click=${this.handleSaveMemory}>Update Memory</wa-button>
+			</wa-dialog>
 
 			<!-- Glossary Edit Dialog -->
 			<wa-dialog label=${this.editingEntry?.term ? 'Edit Entry' : 'Add Entry'} ?open=${this.isGlossaryDialogOpen} @wa-after-hide=${() => (this.isGlossaryDialogOpen = false)}>

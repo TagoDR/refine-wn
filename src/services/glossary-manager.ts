@@ -69,7 +69,6 @@ export class GlossaryManager {
     try {
       const dict = JSON.parse(json) as Record<string, string[]>;
       for (const [term, searches] of Object.entries(dict)) {
-        // Find existing entry by term to avoid duplicates, or create new
         const existing = Array.from(this.entries.values()).find(e => e.term === term);
         const entry: GlossaryEntry = {
           id: existing?.id || crypto.randomUUID(),
@@ -83,5 +82,41 @@ export class GlossaryManager {
       console.error('Failed to import glossary JSON:', e);
       throw e;
     }
+  }
+
+  /**
+   * Applies the glossary to a text string.
+   * Uses word boundaries and regex escaping for safety.
+   */
+  applyGlossary(text: string): string {
+    let result = text;
+    // Sort entries by term length (descending) to avoid partial replacements
+    const sortedEntries = this.getAllEntries().sort((a, b) => b.term.length - a.term.length);
+
+    for (const entry of sortedEntries) {
+      if (!entry.term || entry.searches.length === 0) continue;
+
+      for (const search of entry.searches) {
+        if (!search.trim()) continue;
+
+        try {
+          let regex: RegExp;
+          if (search.startsWith('/') && search.endsWith('/')) {
+            // User provided a raw regex
+            regex = new RegExp(search.slice(1, -1), 'gu');
+          } else {
+            // Standard string search - escape and use word boundaries
+            const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            regex = new RegExp(`\\b${escaped}\\b`, 'gu');
+          }
+
+          // Use a replacement function to avoid $1, $2, etc. issues in the term
+          result = result.replace(regex, () => entry.term);
+        } catch (e) {
+          console.error(`Invalid glossary pattern: ${search}`, e);
+        }
+      }
+    }
+    return result;
   }
 }

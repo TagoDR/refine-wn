@@ -1,0 +1,8 @@
+{
+  "ai": {
+    "endpoint": "http://localhost:5004/v1/chat/completions",
+    "model": "google/gemma-4-e4b",
+    "maxContext": 8192,
+    "temperature": 0.7
+  }
+}

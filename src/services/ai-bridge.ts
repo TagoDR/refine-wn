@@ -1,4 +1,11 @@
 import { get, set } from 'idb-keyval';
+import { ConfigService} from './config-service';
+
+// Import prompts using Vite's ?raw
+import contentFilterPrompt from '../instructions/content-filter.md?raw';
+import glossaryArchitectPrompt from '../instructions/glossary-architect.md?raw';
+import narrativePolisherPrompt from '../instructions/narrative-polisher.md?raw';
+import memoryHistorianPrompt from '../instructions/memory-historian.md?raw';
 
 export interface AiResponse {
   content: string;
@@ -6,11 +13,14 @@ export interface AiResponse {
 }
 
 export class AiBridge {
-  private readonly endpoint = 'http://localhost:5004/v1/chat/completions';
-  private readonly testEndpoint = 'http://localhost:5004/v1/responses';
   private readonly CACHE_PREFIX = 'ai-cache-';
+  private configService: ConfigService;
 
   public onLog?: (message: string, type?: 'info' | 'error' | 'success') => void;
+
+  constructor(configService: ConfigService) {
+    this.configService = configService;
+  }
 
   private log(message: string, type: 'info' | 'error' | 'success' = 'info') {
     if (this.onLog) this.onLog(message, type);
@@ -20,44 +30,25 @@ export class AiBridge {
    * Tests the connection to the local AI.
    */
   async testConnection(): Promise<boolean> {
-    this.log('Testing connection to port 5004...', 'info');
+    const config = this.configService.getConfig();
+    this.log(`Testing connection to ${config.ai.endpoint}...`, 'info');
     try {
-      // First try the standard OpenAI format
-      this.log(`Trying standard endpoint: ${this.endpoint}`, 'info');
-      const response = await fetch(this.endpoint, {
+      const response = await fetch(config.ai.endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'google/gemma-4-e4b',
+          model: config.ai.model,
           messages: [{ role: 'user', content: 'ping' }],
           max_tokens: 5,
         }),
       });
 
       if (response.ok) {
-        this.log('Standard endpoint responded OK', 'success');
+        this.log('Endpoint responded OK', 'success');
         return true;
       }
 
-      this.log(`Standard endpoint failed: ${response.status}`, 'error');
-
-      // If that fails, try the /v1/responses format provided by the user
-      this.log(`Trying alternative endpoint: ${this.testEndpoint}`, 'info');
-      const altResponse = await fetch(this.testEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'google/gemma-4-e4b',
-          input: 'ping',
-        }),
-      });
-
-      if (altResponse.ok) {
-        this.log('Alternative endpoint responded OK', 'success');
-        return true;
-      }
-
-      this.log(`Alternative endpoint failed: ${altResponse.status}`, 'error');
+      this.log(`Endpoint failed: ${response.status}`, 'error');
       return false;
     } catch (err) {
       this.log(`Connection error: ${err}`, 'error');
@@ -70,8 +61,8 @@ export class AiBridge {
    * Generic method to call the local AI with retry logic.
    */
   async callAi(prompt: string, systemPrompt: string, useCache = true): Promise<string> {
-    // Fix InvalidCharacterError: btoa only supports Latin1.
-    // Use a simple hash or UTF-8 safe encoding for the cache key.
+    const config = this.configService.getConfig();
+    
     const utf8SafeBase64 = (str: string) =>
       btoa(
         encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) =>
@@ -94,16 +85,16 @@ export class AiBridge {
     while (retries > 0) {
       this.log(`Calling AI (Attempt ${4 - retries}/3)...`, 'info');
       try {
-        const response = await fetch(this.endpoint, {
+        const response = await fetch(config.ai.endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'google/gemma-4-e4b', // Default for LM Studio
+            model: config.ai.model,
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: prompt },
             ],
-            temperature: 0.7,
+            temperature: config.ai.temperature,
           }),
         });
 
@@ -148,29 +139,29 @@ export class AiBridge {
    * Prompt for Name Extraction (The Glossary Architect)
    */
   async extractNames(text: string): Promise<string> {
-    const systemPrompt = `You are the Glossary Architect. Entity Extraction and Contextual Translation.
-Focus on Xianxia/Wuxia/LitRPG terminology.
-Identify "Name-Patterns" (e.g., [Surname] [Title], Sect names).
-Suggest "High Fantasy" alternatives for literal MTL translations.
-Output ONLY a JSON array of objects: [{"term": "Refined Name", "searches": ["MTL Name 1", "MTL Name 2"], "category": "Name"}]`;
-
-    return this.callAi(`Extract entities from this text:\n\n${text}`, systemPrompt, false);
+    return this.callAi(`Extract entities from this text:\n\n${text}`, glossaryArchitectPrompt, false);
   }
 
   /**
    * Prompt for Chapter Refinement (The Narrative Polisher)
    */
-  async refineChapter(text: string, glossaryContext: string): Promise<string> {
-    const systemPrompt = `You are the Narrative Polisher. Prose Refinement and Flow Improvement.
-Remove MTL artifacts (e.g., "This seat," "The crowd was shocked").
-Maintain a consistent tone (Epic/Serious or LitRPG/System-focused).
-Strip out double chapter titles and editor notes.
-APPLY THIS GLOSSARY STRICTLY. Each entry has a "term" (the final word to use) and "searches" (the list of MTL/raw words to be replaced by that term):
-${glossaryContext}
-
-Output ONLY the refined chapter prose.`;
+  async refineChapter(text: string, glossaryContext: string, memoryContext: string): Promise<string> {
+    const systemPrompt = narrativePolisherPrompt
+      .replace('{{memory}}', memoryContext)
+      .replace('{{glossary}}', glossaryContext);
 
     return this.callAi(text, systemPrompt);
+  }
+
+  /**
+   * Update the story memory based on the refined chapter.
+   */
+  async updateMemory(chapterText: string, currentMemory: string): Promise<string> {
+    const systemPrompt = memoryHistorianPrompt
+      .replace('{{memory}}', currentMemory)
+      .replace('{{chapter}}', chapterText.substring(0, 2000)); // Only send a snippet if too large
+
+    return this.callAi('Update story memory.', systemPrompt, false);
   }
 
   /**
@@ -179,17 +170,11 @@ Output ONLY the refined chapter prose.`;
   async identifyJunkChapters(
     chapters: { id: string; title: string; snippet: string }[],
   ): Promise<string[]> {
-    const systemPrompt = `You are the Content Filter. Your job is to identify "junk" chapters in an EPUB.
-Junk chapters include: Covers, Table of Contents, Copyright pages, Forewords, Afterwords, Source/Site advertisements, empty chapters or just book/section titles, or Author notes that are not part of the story prose.
-Analyze the titles and snippets provided.
-Output ONLY a JSON array of IDs that should be REMOVED.
-Example: ["id1", "id2"]`;
-
     const input = chapters
       .map(c => `ID: ${c.id} | Title: ${c.title} | Snippet: ${c.snippet.substring(0, 300)}`)
       .join('\n---\n');
     try {
-      const response = await this.callAi(input, systemPrompt, false);
+      const response = await this.callAi(input, contentFilterPrompt, false);
       // Try to parse the array from the response
       const match = response.match(/\[.*\]/s);
       if (match) {
