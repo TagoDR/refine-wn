@@ -257,6 +257,7 @@ export class AppRoot extends LitElement {
         this.chapters[i] = { ...this.chapters[i], content: refined };
 
         this.storyMemory = await this.aiBridge.updateMemory(refined, this.storyMemory);
+        this.addLog('info', `Story Memory updated after chapter: ${this.chapters[i].title}`);
         await this.storyMemoryService.save(this.storyMemory);
         if (i % 2 === 0) this.chapters = [...this.chapters];
       }
