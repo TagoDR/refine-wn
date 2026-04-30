@@ -2,6 +2,7 @@ import { css, html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import type { Chapter } from '../services/epub-service';
+import type { LogEntry } from '../types';
 
 @customElement('reader-column')
 export class ReaderColumn extends LitElement {
@@ -64,7 +65,7 @@ export class ReaderColumn extends LitElement {
 
   @property({ type: Object }) chapter: Chapter | null = null;
   @property({ type: Boolean }) diffMode = false;
-  @property({ type: Array }) logs: any[] = [];
+  @property({ type: Array }) logs: LogEntry[] = [];
 
   render() {
     return html`

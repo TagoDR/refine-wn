@@ -163,8 +163,7 @@ export class EpubService {
       }
     }
 
-    const updatedOpfContent =
-      `<?xml version="1.0" encoding="UTF-8"?>${opfDoc.documentElement.outerHTML}`;
+    const updatedOpfContent = `<?xml version="1.0" encoding="UTF-8"?>${opfDoc.documentElement.outerHTML}`;
 
     // 2. Build the new ZIP
     for (const [path, file] of Object.entries(this.zip.files)) {
@@ -179,7 +178,6 @@ export class EpubService {
         : path;
 
       // If it's a chapter file (XHTML) and not in our href list, skip it
-      // We check for .xhtml or .html to be safe, and verify it's under rootDir
       if (path.startsWith(this.rootDir) && (path.endsWith('.xhtml') || path.endsWith('.html'))) {
         if (!updatedChapterHrefs.has(relativePath)) {
           continue; // Skip trashed chapter file
@@ -210,6 +208,7 @@ export class EpubService {
     if (!content) throw new Error(`File not found: ${path}`);
 
     const parser = new DOMParser();
+    // Linkedom types aren't perfectly aligned with native Document, so we cast to unknown then Document
     return parser.parseFromString(content, 'text/xml') as unknown as Document;
   }
 }

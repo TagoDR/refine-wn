@@ -1,6 +1,7 @@
 # Project Roadmap (TODO)
 
 ## Next Steps
+
 - [ ] **Batch Glossary Application**: Refactor glossary application to run as a background service or worker.
 - [ ] **UI Polish**:
   - [ ] Add tooltips to all icon buttons.

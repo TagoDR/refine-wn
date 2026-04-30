@@ -21,9 +21,9 @@ export function splitText(text: string, maxChars: number): string[] {
         for (const word of words) {
           if ((wordChunk + word).length > maxChars) {
             chunks.push(wordChunk.trim());
-            wordChunk = word + ' ';
+            wordChunk = `${word} `;
           } else {
-            wordChunk += word + ' ';
+            wordChunk += `${word} `;
           }
         }
         currentChunk = wordChunk;

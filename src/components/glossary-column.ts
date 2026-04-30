@@ -110,7 +110,7 @@ export class GlossaryColumn extends LitElement {
 			<div class="scroll-content">
 				${this.entries.map(
           entry => html`
-					<div class="glossary-item" @click=${() => this.dispatchEvent(new CustomEvent('edit-entry', { detail: entry }))} style="cursor: pointer;">
+					<div class="glossary-item" @click=${() => this.dispatchEvent(new CustomEvent<GlossaryEntry>('edit-entry', { detail: entry }))} style="cursor: pointer;">
 						<div style="display:flex; justify-content:space-between; align-items:flex-start;">
 							<div class="glossary-term">${entry.term}</div>
 							<div class="glossary-actions">
@@ -119,7 +119,7 @@ export class GlossaryColumn extends LitElement {
                   e: Event,
                 ) => {
                   e.stopPropagation();
-                  this.dispatchEvent(new CustomEvent('delete-entry', { detail: entry.id }));
+                  this.dispatchEvent(new CustomEvent<string>('delete-entry', { detail: entry.id }));
                 }}></wa-icon-button>
 							</div>
 						</div>

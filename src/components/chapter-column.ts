@@ -104,14 +104,14 @@ export class ChapterColumn extends LitElement {
 			<div class="scroll-content">
 				${this.chapters.map(
           (ch, i) => html`
-					<div class="chapter-item ${this.selectedIndex === i ? 'selected' : ''}" @click=${() => this.dispatchEvent(new CustomEvent('select-chapter', { detail: i }))}>
+					<div class="chapter-item ${this.selectedIndex === i ? 'selected' : ''}" @click=${() => this.dispatchEvent(new CustomEvent<number>('select-chapter', { detail: i }))}>
 						<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
 							${ch.title || `Chapter ${i + 1}`}
 						</span>
 						<div style="display:flex; gap:2px;">
 							<wa-button size="extra-small" variant="neutral" ghost @click=${(e: Event) => {
                 e.stopPropagation();
-                this.dispatchEvent(new CustomEvent('refine-chapter', { detail: i }));
+                this.dispatchEvent(new CustomEvent<number>('refine-chapter', { detail: i }));
               }} title="Refine Chapter">
 								<wa-icon src="/src/icons/list-search.svg"></wa-icon>
 							</wa-button>
@@ -119,7 +119,7 @@ export class ChapterColumn extends LitElement {
                 e: Event,
               ) => {
                 e.stopPropagation();
-                this.dispatchEvent(new CustomEvent('trash-chapter', { detail: i }));
+                this.dispatchEvent(new CustomEvent<number>('trash-chapter', { detail: i }));
               }}>
 								<wa-icon src="/src/icons/trash.svg"></wa-icon>
 							</wa-button>

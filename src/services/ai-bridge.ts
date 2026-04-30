@@ -11,11 +11,17 @@ export interface AiResponse {
   error?: string;
 }
 
+export interface ExtractedTerm {
+  term: string;
+  searches: string[];
+  category: 'Name' | 'Place' | 'Term' | 'Other';
+}
+
 export class AiBridge {
   private readonly CACHE_PREFIX = 'ai-cache-';
   private configService: ConfigService;
 
-  public onLog?: (message: string, type?: 'info' | 'error' | 'success') => void;
+  public onLog?: (message: string, type: 'info' | 'error' | 'success') => void;
 
   constructor(configService: ConfigService) {
     this.configService = configService;
@@ -98,7 +104,9 @@ export class AiBridge {
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
+          const errorData = (await response.json().catch(() => ({}))) as {
+            error?: { message?: string };
+          };
           const errorMsg = errorData.error?.message || `HTTP ${response.status}`;
           this.log(`AI Error: ${errorMsg}`, 'error');
 
@@ -109,7 +117,7 @@ export class AiBridge {
           throw new Error(errorMsg);
         }
 
-        const data = await response.json();
+        const data = (await response.json()) as { choices: { message: { content: string } }[] };
         const result = data.choices[0].message.content;
 
         if (useCache) {
@@ -137,7 +145,7 @@ export class AiBridge {
   /**
    * Prompt for Name Extraction (The Glossary Architect)
    */
-  async extractNames(text: string): Promise<any[]> {
+  async extractNames(text: string): Promise<ExtractedTerm[]> {
     if (!glossaryArchitectPrompt) {
       this.log('Glossary Architect prompt is missing or empty!', 'error');
       return [];
@@ -155,7 +163,7 @@ export class AiBridge {
       // Find JSON block or array
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        const data = JSON.parse(jsonMatch[0]);
+        const data = JSON.parse(jsonMatch[0]) as ExtractedTerm[];
         if (Array.isArray(data)) {
           this.log(`Extracted ${data.length} terms.`, 'success');
           return data;

@@ -1,11 +1,23 @@
 import type { Chapter, EpubMetadata } from './epub-service';
 
+export interface WorkerRequest {
+  id: number;
+  type: 'load' | 'save';
+  payload: unknown;
+}
+
+export interface WorkerResponse {
+  id: number;
+  payload?: unknown;
+  error?: string;
+}
+
 export class EpubWorkerClient {
   private worker: Worker;
   private nextId = 0;
   private pendingRequests = new Map<
     number,
-    { resolve: (val: unknown) => void; reject: (err: unknown) => void }
+    { resolve: (val: unknown) => void; reject: (err: Error) => void }
   >();
 
   constructor() {
@@ -13,7 +25,7 @@ export class EpubWorkerClient {
       type: 'module',
     });
 
-    this.worker.onmessage = (e: MessageEvent) => {
+    this.worker.onmessage = (e: MessageEvent<WorkerResponse>) => {
       const { id, payload, error } = e.data;
       const request = this.pendingRequests.get(id);
       if (request) {
@@ -28,25 +40,26 @@ export class EpubWorkerClient {
   }
 
   async load(data: Blob | ArrayBuffer): Promise<{ metadata: EpubMetadata; chapters: Chapter[] }> {
-    return this.send('load', data);
+    return this.send<{ metadata: EpubMetadata; chapters: Chapter[] }>('load', data);
   }
 
   async save(chapters: Chapter[]): Promise<Blob> {
-    return this.send('save', chapters);
+    return this.send<Blob>('save', chapters);
   }
 
-  private send<T>(type: string, payload: unknown): Promise<T> {
+  private send<T>(type: WorkerRequest['type'], payload: unknown): Promise<T> {
     return new Promise((resolve, reject) => {
       const id = this.nextId++;
       this.pendingRequests.set(id, {
         resolve: resolve as (val: unknown) => void,
         reject,
       });
-      this.worker.postMessage({ type, payload, id });
+      const request: WorkerRequest = { type, payload, id };
+      this.worker.postMessage(request);
     });
   }
 
-  terminate() {
+  terminate(): void {
     this.worker.terminate();
   }
 }
