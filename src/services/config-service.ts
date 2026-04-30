@@ -25,8 +25,8 @@ export class ConfigService {
         ...saved,
         ai: {
           ...defaultConfig.ai,
-          ...(saved.ai || {})
-        }
+          ...(saved.ai || {}),
+        },
       };
     }
     return this.config;

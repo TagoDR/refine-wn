@@ -1,11 +1,10 @@
 import { get, set } from 'idb-keyval';
-import { ConfigService} from './config-service';
-
 // Import prompts using Vite's ?raw
 import contentFilterPrompt from '../instructions/content-filter.md?raw';
 import glossaryArchitectPrompt from '../instructions/glossary-architect.md?raw';
-import narrativePolisherPrompt from '../instructions/narrative-polisher.md?raw';
 import memoryHistorianPrompt from '../instructions/memory-historian.md?raw';
+import narrativePolisherPrompt from '../instructions/narrative-polisher.md?raw';
+import type { ConfigService } from './config-service';
 
 export interface AiResponse {
   content: string;
@@ -62,7 +61,7 @@ export class AiBridge {
    */
   async callAi(prompt: string, systemPrompt: string, useCache = true): Promise<string> {
     const config = this.configService.getConfig();
-    
+
     const utf8SafeBase64 = (str: string) =>
       btoa(
         encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (_, p1) =>
@@ -146,8 +145,12 @@ export class AiBridge {
 
     this.log('Extracting names from chapter...', 'info');
     const prompt = glossaryArchitectPrompt.replace('{{text}}', text);
-    const response = await this.callAi(prompt, 'You are a helpful assistant that only outputs valid JSON.', false);
-    
+    const response = await this.callAi(
+      prompt,
+      'You are a helpful assistant that only outputs valid JSON.',
+      false,
+    );
+
     try {
       // Find JSON block or array
       const jsonMatch = response.match(/\[[\s\S]*\]/);
@@ -171,7 +174,11 @@ export class AiBridge {
   /**
    * Prompt for Chapter Refinement (The Narrative Polisher)
    */
-  async refineChapter(text: string, glossaryContext: string, memoryContext: string): Promise<string> {
+  async refineChapter(
+    text: string,
+    glossaryContext: string,
+    memoryContext: string,
+  ): Promise<string> {
     const systemPrompt = narrativePolisherPrompt
       .replace('{{memory}}', memoryContext)
       .replace('{{glossary}}', glossaryContext);
@@ -193,12 +200,20 @@ export class AiBridge {
   /**
    * Identify if a single chapter is junk.
    */
-  async isJunkChapter(chapter: { id: string; title: string; snippet: string }): Promise<{ remove: boolean; reason?: string }> {
+  async isJunkChapter(chapter: {
+    id: string;
+    title: string;
+    snippet: string;
+  }): Promise<{ remove: boolean; reason?: string }> {
     const input = `Title: ${chapter.title}\nSnippet: ${chapter.snippet.substring(0, 500)}`;
     const prompt = contentFilterPrompt.replace('{{input}}', input);
-    
+
     try {
-      const response = await this.callAi(prompt, 'You are a helpful assistant that only outputs valid JSON.', false);
+      const response = await this.callAi(
+        prompt,
+        'You are a helpful assistant that only outputs valid JSON.',
+        false,
+      );
       const jsonMatch = response.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         return JSON.parse(jsonMatch[0]);

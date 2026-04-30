@@ -1,32 +1,22 @@
 [
   {
     "term": "Xia Ruofei",
-    "searches": [
-      "Xia ruofei"
-    ],
+    "searches": ["Xia ruofei"],
     "category": "Name"
   },
   {
     "term": "Liu Hang",
-    "searches": [
-      "Liu Hang"
-    ],
+    "searches": ["Liu Hang"],
     "category": "Name"
   },
   {
     "term": "Heaven-Veiling Palm",
-    "searches": [
-      "Sky-covering hand",
-      "Cloud-parting strike"
-    ],
+    "searches": ["Sky-covering hand", "Cloud-parting strike"],
     "category": "Term"
   },
   {
     "term": "Peach Blossom Source",
-    "searches": [
-      "Peach orchard",
-      "Hidden valley"
-    ],
+    "searches": ["Peach orchard", "Hidden valley"],
     "category": "Place"
   }
 ]

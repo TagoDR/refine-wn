@@ -121,7 +121,7 @@ export class EpubService {
 
     // 1. Update the .opf file (Manifest & Spine)
     const opfDoc = await this.readXmlFile(this.opfPath);
-    
+
     // Filter/Update Manifest
     const manifest = opfDoc.querySelector('manifest');
     if (manifest) {
@@ -163,7 +163,8 @@ export class EpubService {
       }
     }
 
-    const updatedOpfContent = '<?xml version="1.0" encoding="UTF-8"?>\n' + opfDoc.documentElement.outerHTML;
+    const updatedOpfContent =
+      `<?xml version="1.0" encoding="UTF-8"?>${opfDoc.documentElement.outerHTML}`;
 
     // 2. Build the new ZIP
     for (const [path, file] of Object.entries(this.zip.files)) {
@@ -173,14 +174,16 @@ export class EpubService {
       }
 
       // Check if this path is a chapter file
-      const relativePath = path.startsWith(this.rootDir) ? path.substring(this.rootDir.length) : path;
-      
+      const relativePath = path.startsWith(this.rootDir)
+        ? path.substring(this.rootDir.length)
+        : path;
+
       // If it's a chapter file (XHTML) and not in our href list, skip it
       // We check for .xhtml or .html to be safe, and verify it's under rootDir
       if (path.startsWith(this.rootDir) && (path.endsWith('.xhtml') || path.endsWith('.html'))) {
-         if (!updatedChapterHrefs.has(relativePath)) {
-           continue; // Skip trashed chapter file
-         }
+        if (!updatedChapterHrefs.has(relativePath)) {
+          continue; // Skip trashed chapter file
+        }
       }
 
       const content = await file.async('uint8array');

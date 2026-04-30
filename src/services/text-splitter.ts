@@ -13,7 +13,7 @@ export function splitText(text: string, maxChars: number): string[] {
         chunks.push(currentChunk.trim());
         currentChunk = '';
       }
-      
+
       // If a single sentence is longer than maxChars, split it by words
       if (sentence.length > maxChars) {
         const words = sentence.split(/\s+/);

@@ -74,7 +74,7 @@ export class GlossaryManager {
           id: existing?.id || crypto.randomUUID(),
           term: term,
           searches: Array.from(new Set([...(existing?.searches || []), ...searches])),
-          category: existing?.category || 'Other'
+          category: existing?.category || 'Other',
         };
         this.upsertEntry(entry);
       }
