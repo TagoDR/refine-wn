@@ -45,15 +45,8 @@
     }
   },
   "html": {
-    "formatter": {
-      "selfCloseVoidElements": "always"
-    }
+    "experimentalFullSupportEnabled": true
   },
-  "overrides": [
-    {
-      "includes": ["*.svg"]
-    }
-  ],
   "assist": {
     "enabled": true,
     "actions": {

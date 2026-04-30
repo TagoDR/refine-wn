@@ -24,7 +24,7 @@ export class AppRoot extends LitElement {
 			height: 100vh;
 			background-color: var(--wa-color-surface-default);
 			color: var(--wa-color-text-normal);
-			font-family: var(--wa-font-family-sans);
+			font-family: var(--wa-font-family-body),sans-serif;
 			overflow: hidden;
 		}
 
@@ -77,8 +77,8 @@ export class AppRoot extends LitElement {
     await this.glossaryManager.load();
     this.storyMemory = await this.storyMemoryService.load();
 
-    // Auto-load test glossary for faster testing if empty
-    if (this.glossaryManager.getAllEntries().length === 0) {
+    // Auto-load test glossary for faster testing if empty (Dev only)
+    if (import.meta.env.DEV && this.glossaryManager.getAllEntries().length === 0) {
       try {
         const response = await fetch('/test/test-glossary.json');
         if (response.ok) {
@@ -97,7 +97,10 @@ export class AppRoot extends LitElement {
     }
 
     this.glossaryEntries = this.glossaryManager.getAllEntries();
-    await this.autoLoadTestEpub();
+
+    if (import.meta.env.DEV) {
+      await this.autoLoadTestEpub();
+    }
   }
 
   private async autoLoadTestEpub() {
@@ -245,7 +248,6 @@ export class AppRoot extends LitElement {
     try {
       const total = this.chapters.length;
       this.totalSteps = total;
-      const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
 
       for (let i = this.currentStep; i < total; i++) {
         if (this.isPaused) return;
@@ -253,7 +255,23 @@ export class AppRoot extends LitElement {
         this.progress = (i / total) * 100;
         this.statusMessage = `Refining: ${this.chapters[i].title}`;
 
+        const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
+
         let refined = await this.processRefinement(this.chapters[i].content, glossaryContext);
+
+        // Extract new names from the refined text to update glossary
+        const extracted = await this.aiBridge.extractNames(
+          refined,
+          glossaryContext,
+          this.storyMemory,
+        );
+        if (extracted.length > 0) {
+          this.glossaryManager.mergeTerms(extracted);
+          await this.glossaryManager.save();
+          this.glossaryEntries = this.glossaryManager.getAllEntries();
+          this.addLog('success', `Glossary updated with ${extracted.length} new/refined terms.`);
+        }
+
         refined = this.glossaryManager.applyGlossary(refined);
         this.chapters[i] = { ...this.chapters[i], content: refined };
 

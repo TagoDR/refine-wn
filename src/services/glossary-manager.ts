@@ -119,4 +119,22 @@ export class GlossaryManager {
     }
     return result;
   }
+
+  /**
+   * Merges a list of extracted terms into the glossary.
+   */
+  mergeTerms(terms: { term: string; searches: string[]; category: string }[]): void {
+    for (const item of terms) {
+      const existing = Array.from(this.entries.values()).find(
+        e => e.term.toLowerCase() === item.term.toLowerCase(),
+      );
+      const entry: GlossaryEntry = {
+        id: existing?.id || crypto.randomUUID(),
+        term: item.term,
+        searches: Array.from(new Set([...(existing?.searches || []), ...item.searches])),
+        category: (item.category as GlossaryEntry['category']) || existing?.category || 'Other',
+      };
+      this.upsertEntry(entry);
+    }
+  }
 }

@@ -145,14 +145,21 @@ export class AiBridge {
   /**
    * Prompt for Name Extraction (The Glossary Architect)
    */
-  async extractNames(text: string): Promise<ExtractedTerm[]> {
+  async extractNames(
+    text: string,
+    glossaryContext: string,
+    memoryContext: string,
+  ): Promise<ExtractedTerm[]> {
     if (!glossaryArchitectPrompt) {
       this.log('Glossary Architect prompt is missing or empty!', 'error');
       return [];
     }
 
     this.log('Extracting names from chapter...', 'info');
-    const prompt = glossaryArchitectPrompt.replace('{{text}}', text);
+    const prompt = glossaryArchitectPrompt
+      .replace('{{glossary}}', glossaryContext)
+      .replace('{{memory}}', memoryContext)
+      .replace('{{text}}', text);
     const response = await this.callAi(
       prompt,
       'You are a helpful assistant that only outputs valid JSON.',
