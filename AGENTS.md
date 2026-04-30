@@ -27,22 +27,22 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
 
 **Goal:** Transform MTL artifacts into high-quality prose using Glossary and Memory.
 
-- **Workflow:** Receives raw text + Glossary Context + Story Memory.
+- **Workflow:** Receives raw text + Glossary Context + Story Memory. Supports an **Interactive Correction Flow** where users can pause, edit the Narrative Memory to correct hallucinations, and "Retry" the chapter.
 - **Output:** Refined English prose that adheres to the user's defined dictionary and current story state.
 
 ### 3. The Memory Historian
 
 **Goal:** Maintain narrative continuity.
 
-- **Workflow:** Scans newly refined chapters to update the Story Memory.
+- **Workflow:** Scans newly refined chapters to update the Story Memory. Updates are visible **Live** in the UI, allowing for mid-process intervention.
 - **Output:** Updated summary of characters, skills, items, and plot progress.
 
 ### 4. The Content Filter
 
-**Goal:** Automate the "Trash" system.
+**Goal:** Automate the "Trash" system via Bidirectional Pruning.
 
-- **Workflow:** Scans chapter metadata to identify non-story content (Covers, TOCs, Ads).
-- **Output:** IDs of chapters recommended for removal.
+- **Workflow:** Performs **Bidirectional Scans** (Forward from start, Backward from end) on each imported EPUB. Decisions are based on chapter titles and content snippets.
+- **Output:** Identification of junk chapters (Covers, TOCs, ads) to be pruned until valid story prose is reached.
 
 ---
 

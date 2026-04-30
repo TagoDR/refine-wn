@@ -52,11 +52,15 @@ RefineWN is a specialized local workstation designed for translating and polishi
 
 ## Workflow
 
-1. **Import**: Open one or more EPUB files.
-2. **Cleanup**: Run the **Content Cleanup** service to automatically remove non-story chapters (Covers, TOCs, etc.).
-3. **Glossary**: Run **Glossary Extraction** to identify main terms or manually add your own in the **GLOSSARY** column.
-4. **Refine**: Use **Refine All** to process the entire book. The AI will apply the glossary and update the **Story Memory** as it progresses.
-5. **Export**: Once satisfied, click **Save** in the **CHAPTERS** column to generate a new, refined EPUB.
+1. **Import**: Open one or more EPUB files. Source tracking ensures books are managed correctly.
+2. **Cleanup**: Run **Content Cleanup** to prune covers and TOCs from the beginning and end of each EPUB.
+3. **Glossary**: Run **Glossary Extraction** or manually add terms. Apply terminology across all chapters.
+4. **Refinement**:
+   - Run **Refine All**.
+   - **Stop** at any time to fix hallucinations.
+   - Edit **Story Memory** to provide the AI with missing plot context.
+   - Click **Retry Chapter** to re-process with the corrected facts.
+5. **Export**: Click **Save** to generate the refined EPUB(s) with preserved manifest structure.
 
 ## Documentation
 
