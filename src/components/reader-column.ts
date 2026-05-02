@@ -84,10 +84,16 @@ export class ReaderColumn extends LitElement {
             ? html`
 					<div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; flex-shrink:0;">
 						<h1 style="margin:0;">${this.chapter.title}</h1>
-						<wa-button size="small" @click=${() => this.dispatchEvent(new CustomEvent('toggle-diff'))}>
-							<wa-icon src="/src/icons/list-search.svg" slot="prefix"></wa-icon>
-							${this.diffMode ? 'Refined View' : 'Diff View'}
-						</wa-button>
+						<div style="display:flex; gap: var(--wa-space-xs);">
+							<wa-button size="small" variant="neutral" @click=${() => this.dispatchEvent(new CustomEvent('discard-refinement'))} title="Revert to original MTL">
+								<wa-icon src="/src/icons/trash.svg" slot="prefix"></wa-icon>
+								Discard
+							</wa-button>
+							<wa-button size="small" @click=${() => this.dispatchEvent(new CustomEvent('toggle-diff'))}>
+								<wa-icon src="/src/icons/list-search.svg" slot="prefix"></wa-icon>
+								${this.diffMode ? 'Refined View' : 'Diff View'}
+							</wa-button>
+						</div>
 					</div>
 					
 					${

@@ -50,11 +50,14 @@ export class BatchRefinementService {
       const memoryContext = this.storyMemoryService.getMemory();
 
       // 1. Refine Chunk
-      const chunkRefined = await this.aiBridge.refineChapter(
+      let chunkRefined = await this.aiBridge.refineChapter(
         chunks[i],
         glossaryContext,
         memoryContext,
       );
+
+      // Clean up markdown wrappers if AI included them
+      chunkRefined = this.stripMarkdown(chunkRefined);
 
       // 2. Extract Terms from refined chunk
       const extracted = await this.aiBridge.extractNames(
@@ -81,5 +84,9 @@ export class BatchRefinementService {
     const finalContent = this.glossaryManager.applyGlossary(fullRefinedContent.trim());
 
     return finalContent;
+  }
+
+  private stripMarkdown(text: string): string {
+    return text.replace(/```(?:html|xml)?\n?([\s\S]*?)```/g, '$1').trim();
   }
 }

@@ -202,7 +202,18 @@ export class AppRoot extends LitElement {
     this.addLog('info', 'Generating refined EPUB...');
     let url = '';
     try {
-      const blob = await this.epubClient.save(this.chapters);
+      // Swap Object URLs back to internal EPUB paths before saving
+      const chaptersToSave = this.chapters.map(ch => {
+        let content = ch.content;
+        for (const [href, blobUrl] of this.assetUrls.entries()) {
+          // Use a simple global replacement for the specific blob URL
+          const regex = new RegExp(blobUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+          content = content.replace(regex, href);
+        }
+        return { ...ch, content };
+      });
+
+      const blob = await this.epubClient.save(chaptersToSave);
       url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -469,6 +480,17 @@ export class AppRoot extends LitElement {
 					.diffMode=${this.diffMode}
 					.logs=${this.logs}
 					@toggle-diff=${() => (this.diffMode = !this.diffMode)}
+					@discard-refinement=${() => {
+            if (this.selectedChapterIndex !== -1) {
+              const ch = this.chapters[this.selectedChapterIndex];
+              this.chapters[this.selectedChapterIndex] = {
+                ...ch,
+                content: ch.originalContent || ch.content,
+              };
+              this.chapters = [...this.chapters];
+              this.addLog('info', `Discarded refinement for: ${ch.title}`);
+            }
+          }}
 				></reader-column>
 
 				<service-column
