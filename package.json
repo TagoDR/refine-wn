@@ -11,7 +11,7 @@
     "biome": "biome check --fix ."
   },
   "devDependencies": {
-    "@awesome.me/webawesome": "^3.5.0",
+    "@awesome.me/webawesome": "^3.6.0",
     "@biomejs/biome": "^2.4.13",
     "@types/jszip": "^3.4.0",
     "idb-keyval": "^6.2.2",

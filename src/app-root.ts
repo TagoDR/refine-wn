@@ -1,13 +1,13 @@
 import { css, html, LitElement } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { AiBridge } from './services/ai-bridge';
+import { BatchRefinementService } from './services/batch-refinement-service';
 import { type AppConfig, ConfigService } from './services/config-service';
 import type { Chapter, EpubMetadata } from './services/epub-service';
 import { EpubWorkerClient } from './services/epub-worker-client';
 import { type GlossaryEntry, GlossaryManager } from './services/glossary-manager';
 import { StoryMemoryService } from './services/story-memory';
 import { TextCleaner } from './services/text-cleaner';
-import { splitText } from './services/text-splitter';
 import type { LogEntry } from './types';
 
 // Modular Column Components
@@ -66,6 +66,12 @@ export class AppRoot extends LitElement {
   private glossaryManager = new GlossaryManager();
   private storyMemoryService = new StoryMemoryService();
   private textCleaner = new TextCleaner();
+  private batchRefinementService = new BatchRefinementService(
+    this.aiBridge,
+    this.storyMemoryService,
+    this.glossaryManager,
+    this.configService,
+  );
 
   private addLog(type: LogEntry['type'], message: string) {
     const timestamp = new Date().toLocaleTimeString();
@@ -255,29 +261,17 @@ export class AppRoot extends LitElement {
         this.progress = (i / total) * 100;
         this.statusMessage = `Refining: ${this.chapters[i].title}`;
 
-        const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
-
-        let refined = await this.processRefinement(this.chapters[i].content, glossaryContext);
-
-        // Extract new names from the refined text to update glossary
-        const extracted = await this.aiBridge.extractNames(
-          refined,
-          glossaryContext,
-          this.storyMemory,
+        const refined = await this.batchRefinementService.refineChapter(
+          this.chapters[i].content,
+          (msg, type) => this.addLog(type, msg),
         );
-        if (extracted.length > 0) {
-          this.glossaryManager.mergeTerms(extracted);
-          await this.glossaryManager.save();
-          this.glossaryEntries = this.glossaryManager.getAllEntries();
-          this.addLog('success', `Glossary updated with ${extracted.length} new/refined terms.`);
-        }
 
-        refined = this.glossaryManager.applyGlossary(refined);
         this.chapters[i] = { ...this.chapters[i], content: refined };
 
-        this.storyMemory = await this.aiBridge.updateMemory(refined, this.storyMemory);
-        this.addLog('info', `Story Memory updated after chapter: ${this.chapters[i].title}`);
-        await this.storyMemoryService.save(this.storyMemory);
+        // Sync local state with services
+        this.storyMemory = this.storyMemoryService.getMemory();
+        this.glossaryEntries = this.glossaryManager.getAllEntries();
+
         if (i % 2 === 0) this.chapters = [...this.chapters];
       }
       this.chapters = [...this.chapters];
@@ -291,29 +285,40 @@ export class AppRoot extends LitElement {
     }
   }
 
-  private async processRefinement(rawContent: string, glossaryContext: string): Promise<string> {
-    const config = this.configService.getConfig();
-    const cleaned = this.textCleaner.clean(rawContent);
-    const chunks = splitText(cleaned, config.ai.maxContext - 2000);
-    let refinedContent = '';
-    for (let j = 0; j < chunks.length; j++) {
-      const chunkRefined = await this.aiBridge.refineChapter(
-        chunks[j],
-        glossaryContext,
-        this.storyMemory,
-      );
-      refinedContent += `${chunkRefined}\n\n`;
-    }
-    return refinedContent.trim();
+  private handleExportGlossary() {
+    const json = this.glossaryManager.exportJson();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'glossary.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    this.addLog('info', 'Glossary exported.');
   }
 
   private async handleSaveGlossary() {
-    if (!this.editingEntry?.term) return;
-    this.editingEntry.searches = this.editingEntry.searches.filter(s => s.trim() !== '');
-    this.glossaryManager.upsertEntry(this.editingEntry);
+    if (!this.editingEntry?.term) {
+      this.addLog('error', 'Term is required.');
+      return;
+    }
+
+    // Filter out empty searches
+    const entryToSave = {
+      ...this.editingEntry,
+      searches: this.editingEntry.searches.filter(s => s.trim() !== ''),
+    };
+
+    this.glossaryManager.upsertEntry(entryToSave);
     await this.glossaryManager.save();
-    this.glossaryEntries = this.glossaryManager.getAllEntries();
+
+    // Force immutable update for Lit detection
+    this.glossaryEntries = [...this.glossaryManager.getAllEntries()];
+
     this.isGlossaryDialogOpen = false;
+    this.editingEntry = null;
+    this.addLog('success', 'Glossary entry saved.');
+    this.requestUpdate();
   }
 
   render() {
@@ -342,16 +347,27 @@ export class AppRoot extends LitElement {
               category: 'Other',
             };
             this.isGlossaryDialogOpen = true;
+            this.requestUpdate();
           }}
 					@edit-entry=${(e: CustomEvent<GlossaryEntry>) => {
             this.editingEntry = { ...e.detail };
             this.isGlossaryDialogOpen = true;
+            this.requestUpdate();
           }}
-					@delete-entry=${(e: CustomEvent<string>) => {
+					@delete-entry=${async (e: CustomEvent<string>) => {
             this.glossaryManager.deleteEntry(e.detail);
+            await this.glossaryManager.save();
             this.glossaryEntries = this.glossaryManager.getAllEntries();
           }}
+					@clear-glossary=${async () => {
+            if (confirm('Are you sure you want to clear the entire glossary?')) {
+              await this.glossaryManager.clear();
+              this.glossaryEntries = this.glossaryManager.getAllEntries();
+              this.addLog('info', 'Glossary cleared.');
+            }
+          }}
 					@import-glossary=${() => (this.shadowRoot?.getElementById('glossary-import') as HTMLInputElement | null)?.click()}
+					@export-glossary=${this.handleExportGlossary}
 				></glossary-column>
 
 				<reader-column
@@ -399,24 +415,28 @@ export class AppRoot extends LitElement {
       }}>
 
 			<!-- AI Config Dialog -->
-			<wa-dialog label="AI Settings" ?open=${this.isConfigDialogOpen} @wa-after-hide=${() => (this.isConfigDialogOpen = false)}>
+			<wa-dialog label="AI Settings" ?open=${this.isConfigDialogOpen} @wa-after-hide=${(
+        e: Event,
+      ) => {
+        if (e.target === e.currentTarget) this.isConfigDialogOpen = false;
+      }}>
 				${
           this.currentConfig
             ? html`
 					<div style="display:flex; flex-direction:column; gap: var(--wa-space-m);">
-						<wa-input label="Endpoint URL" .value=${this.currentConfig.ai.endpoint} @wa-input=${(
+						<wa-input label="Endpoint URL" .value=${this.currentConfig.ai.endpoint} @input=${(
               e: Event,
             ) => {
               if (this.currentConfig)
                 this.currentConfig.ai.endpoint = (e.target as HTMLInputElement).value;
             }}></wa-input>
-						<wa-input label="Model Name" .value=${this.currentConfig.ai.model} @wa-input=${(
+						<wa-input label="Model Name" .value=${this.currentConfig.ai.model} @input=${(
               e: Event,
             ) => {
               if (this.currentConfig)
                 this.currentConfig.ai.model = (e.target as HTMLInputElement).value;
             }}></wa-input>
-						<wa-input label="Max Context (tokens)" type="number" .value=${this.currentConfig.ai.maxContext.toString()} @wa-input=${(
+						<wa-input label="Max Context (tokens)" type="number" .value=${this.currentConfig.ai.maxContext.toString()} @input=${(
               e: Event,
             ) => {
               if (this.currentConfig)
@@ -435,7 +455,11 @@ export class AppRoot extends LitElement {
 			</wa-dialog>
 
 			<!-- Story Memory Dialog -->
-			<wa-dialog label="Story Memory" ?open=${this.isMemoryDialogOpen} style="--width: 80vw;" @wa-after-hide=${() => (this.isMemoryDialogOpen = false)}>
+			<wa-dialog label="Story Memory" ?open=${this.isMemoryDialogOpen} style="--width: 80vw;" @wa-after-hide=${(
+        e: Event,
+      ) => {
+        if (e.target === e.currentTarget) this.isMemoryDialogOpen = false;
+      }}>
 				<div style="display: flex; flex-direction: column; gap: var(--wa-space-m);">
 					<p style="font-size: var(--wa-font-size-xs); color: var(--wa-color-text-quiet);">
 						${this.isProcessing ? 'Memory is being updated by AI... (Pause to edit manually)' : 'Edit narrative context to guide the AI.'}
@@ -446,7 +470,7 @@ export class AppRoot extends LitElement {
 						rows="15" 
 						.value=${this.storyMemory} 
 						?readonly=${this.isProcessing}
-						@wa-input=${(e: Event) => (this.storyMemory = (e.target as HTMLTextAreaElement).value)} 
+						@input=${(e: Event) => (this.storyMemory = (e.target as HTMLTextAreaElement).value)} 
 						help-text="Main characters, descriptions, items, and current plot summary.">
 					</wa-textarea>
 				</div>
@@ -457,22 +481,76 @@ export class AppRoot extends LitElement {
 			</wa-dialog>
 
 			<!-- Glossary Edit Dialog -->
-			<wa-dialog label=${this.editingEntry?.term ? 'Edit Entry' : 'Add Entry'} ?open=${this.isGlossaryDialogOpen} @wa-after-hide=${() => (this.isGlossaryDialogOpen = false)}>
+			<wa-dialog label=${this.editingEntry?.term ? 'Edit Entry' : 'Add Entry'} ?open=${this.isGlossaryDialogOpen} @wa-after-hide=${(
+        e: Event,
+      ) => {
+        if (e.target === e.currentTarget) this.isGlossaryDialogOpen = false;
+      }}>
 				${
           this.editingEntry
             ? html`
 					<div style="display:flex; flex-direction:column; gap: var(--wa-space-m);">
-						<wa-input label="Replacement Term" .value=${this.editingEntry.term} @wa-input=${(
+						<wa-input label="Replacement Term" .value=${this.editingEntry.term} @input=${(
               e: Event,
             ) => {
-              if (this.editingEntry) this.editingEntry.term = (e.target as HTMLInputElement).value;
+              if (this.editingEntry) {
+                this.editingEntry.term = (e.target as HTMLInputElement).value;
+                this.requestUpdate();
+              }
             }}></wa-input>
-						<wa-select label="Category" .value=${this.editingEntry.category} @wa-change=${(
+						
+						<div style="display: flex; flex-direction: column; gap: var(--wa-space-xs);">
+							<label style="font-size: var(--wa-font-size-s); font-weight: bold;">Search Patterns (MTL variations)</label>
+							${this.editingEntry.searches.map(
+                (search, idx) => html`
+								<div style="display: flex; gap: var(--wa-space-xs); align-items: center;">
+									<wa-input 
+										style="flex: 1;" 
+										.value=${search} 
+										placeholder="e.g. MTL name variant"
+										@input=${(e: Event) => {
+                      if (this.editingEntry) {
+                        this.editingEntry.searches[idx] = (e.target as HTMLInputElement).value;
+                        this.requestUpdate();
+                      }
+                    }}
+									></wa-input>
+									<wa-button 
+										size="small"
+										variant="neutral"
+										ghost
+										@click=${() => {
+                      if (this.editingEntry) {
+                        this.editingEntry.searches = this.editingEntry.searches.filter(
+                          (_, i) => i !== idx,
+                        );
+                        this.requestUpdate();
+                      }
+                    }}
+									>
+										<wa-icon src="/src/icons/x.svg"></wa-icon>
+									</wa-button>
+								</div>
+							`,
+              )}
+							<wa-button size="small" @click=${() => {
+                if (this.editingEntry) {
+                  this.editingEntry.searches = [...this.editingEntry.searches, ''];
+                  this.requestUpdate();
+                }
+              }}>
+								<wa-icon src="/src/icons/square-plus.svg"></wa-icon> Add Pattern
+							</wa-button>
+						</div>
+
+						<wa-select label="Category" .value=${this.editingEntry.category} @change=${(
               e: Event,
             ) => {
-              if (this.editingEntry)
+              if (this.editingEntry) {
                 this.editingEntry.category = (e.target as HTMLSelectElement)
                   .value as GlossaryEntry['category'];
+                this.requestUpdate();
+              }
             }}>
 							<wa-option value="Name">Name</wa-option><wa-option value="Place">Place</wa-option><wa-option value="Term">Term</wa-option><wa-option value="Other">Other</wa-option>
 						</wa-select>
@@ -480,7 +558,7 @@ export class AppRoot extends LitElement {
 				`
             : ''
         }
-				<wa-button slot="footer" variant="brand" @click=${this.handleSaveGlossary}>Save Entry</wa-button>
+				<wa-button slot="footer" variant="brand" @click=${() => this.handleSaveGlossary()}>Save Entry</wa-button>
 			</wa-dialog>
 		`;
   }

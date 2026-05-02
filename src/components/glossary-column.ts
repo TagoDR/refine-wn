@@ -114,13 +114,20 @@ export class GlossaryColumn extends LitElement {
 						<div style="display:flex; justify-content:space-between; align-items:flex-start;">
 							<div class="glossary-term">${entry.term}</div>
 							<div class="glossary-actions">
-								<wa-icon-button src="/src/icons/edit.svg" label="Edit" class="glossary-icon-btn"></wa-icon-button>
-								<wa-icon-button src="/src/icons/trash.svg" label="Delete" class="glossary-icon-btn" style="color: var(--wa-color-danger-60);" @click=${(
-                  e: Event,
-                ) => {
+								<wa-button size="extra-small" variant="neutral" ghost @click=${(e: Event) => {
+                  e.stopPropagation();
+                  this.dispatchEvent(
+                    new CustomEvent<GlossaryEntry>('edit-entry', { detail: entry }),
+                  );
+                }}>
+									<wa-icon src="/src/icons/edit.svg"></wa-icon>
+								</wa-button>
+								<wa-button size="extra-small" variant="danger" ghost @click=${(e: Event) => {
                   e.stopPropagation();
                   this.dispatchEvent(new CustomEvent<string>('delete-entry', { detail: entry.id }));
-                }}></wa-icon-button>
+                }}>
+									<wa-icon src="/src/icons/trash.svg"></wa-icon>
+								</wa-button>
 							</div>
 						</div>
 						<div class="glossary-searches">${entry.searches.join(', ')}</div>

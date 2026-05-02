@@ -44,6 +44,14 @@ export class GlossaryManager {
   }
 
   /**
+   * Clears all entries.
+   */
+  async clear(): Promise<void> {
+    this.entries.clear();
+    await this.save();
+  }
+
+  /**
    * Returns all entries as an array.
    */
   getAllEntries(): GlossaryEntry[] {
