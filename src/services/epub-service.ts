@@ -10,6 +10,12 @@ export interface Chapter {
   originalContent?: string;
 }
 
+export interface ImageAsset {
+  href: string;
+  content: Uint8Array;
+  mediaType: string;
+}
+
 export interface EpubMetadata {
   title: string;
   creator?: string;
@@ -28,6 +34,36 @@ export class EpubService {
     this.zip = await JSZip.loadAsync(data);
     this.opfPath = await this.findOpfPath();
     this.rootDir = this.opfPath.substring(0, this.opfPath.lastIndexOf('/') + 1);
+  }
+
+  /**
+   * Extracts all binary assets (images) from the EPUB
+   */
+  async getAssets(): Promise<ImageAsset[]> {
+    if (!this.zip) throw new Error('EPUB not loaded');
+    const opfDoc = await this.readXmlFile(this.opfPath);
+    const assets: ImageAsset[] = [];
+
+    const items = Array.from(opfDoc.querySelectorAll('manifest > item'));
+    for (const item of items) {
+      const href = item.getAttribute('href');
+      const mediaType = item.getAttribute('media-type');
+
+      if (href && mediaType?.startsWith('image/')) {
+        const fullPath = this.resolvePath(href);
+        const content = await this.zip.file(fullPath)?.async('uint8array');
+        if (content) {
+          assets.push({ href, content, mediaType });
+        }
+      }
+    }
+    return assets;
+  }
+
+  private resolvePath(href: string): string {
+    // Basic path resolution relative to rootDir
+    if (href.startsWith('/')) return href.substring(1);
+    return this.rootDir + href;
   }
 
   /**

@@ -109,12 +109,6 @@ export class ChapterColumn extends LitElement {
 							${ch.title || `Chapter ${i + 1}`}
 						</span>
 						<div style="display:flex; gap:2px;">
-							<wa-button size="extra-small" variant="neutral" ghost @click=${(e: Event) => {
-                e.stopPropagation();
-                this.dispatchEvent(new CustomEvent<number>('refine-chapter', { detail: i }));
-              }} title="Refine Chapter">
-								<wa-icon src="/src/icons/list-search.svg"></wa-icon>
-							</wa-button>
 							<wa-button class="trash-btn" size="extra-small" variant="danger" ghost @click=${(
                 e: Event,
               ) => {

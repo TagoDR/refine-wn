@@ -30,10 +30,29 @@ export class GlossaryManager {
   }
 
   /**
-   * Adds or updates an entry.
+   * Adds or updates an entry. Discards entry if it has no valid search patterns.
    */
-  upsertEntry(entry: GlossaryEntry): void {
-    this.entries.set(entry.id, entry);
+  upsertEntry(entry: GlossaryEntry): boolean {
+    const term = entry.term.trim();
+    if (!term) return false;
+
+    // Filter out search patterns that are identical to the term (case-insensitive)
+    const validSearches = entry.searches
+      .map(s => s.trim())
+      .filter(s => s !== '' && s.toLowerCase() !== term.toLowerCase());
+
+    if (validSearches.length === 0) {
+      // If the entry was existing and now has no searches, should we delete it?
+      // For upsert, if it's invalid we just don't save/update it.
+      return false;
+    }
+
+    this.entries.set(entry.id, {
+      ...entry,
+      term,
+      searches: Array.from(new Set(validSearches)), // Ensure uniqueness
+    });
+    return true;
   }
 
   /**

@@ -122,18 +122,70 @@ export class AppRoot extends LitElement {
 
   // --- Handlers ---
 
+  private assetUrls: Map<string, string> = new Map();
+
+  private handleCloseProject() {
+    // Revoke and clear asset URLs to prevent memory leaks and state contamination
+    for (const url of this.assetUrls.values()) {
+      URL.revokeObjectURL(url);
+    }
+    this.assetUrls.clear();
+
+    this.chapters = [];
+    this.selectedChapterIndex = -1;
+    this.currentStep = 0;
+    this.totalSteps = 0;
+    this.progress = 0;
+    this.statusMessage = '';
+    this.addLog('info', 'Project closed. All local resources cleared.');
+  }
+
   private async loadEpubFile(file: File) {
     this.isProcessing = true;
     this.addLog('info', `Importing EPUB: ${file.name}`);
+
     try {
+      // Clear existing project state before loading a new one
+      if (this.chapters.length > 0) {
+        this.handleCloseProject();
+      }
+
       const result = await this.epubClient.load(file);
-      const newChapters = result.chapters.map(ch => ({
-        ...ch,
-        id: `${file.name.replace(/\s+/g, '_')}-${ch.id}`,
-        source: file.name,
-      }));
+
+      // Create object URLs for assets (images)
+      for (const asset of result.assets) {
+        const blob = new Blob([asset.content as BlobPart], { type: asset.mediaType });
+        const url = URL.createObjectURL(blob);
+        this.assetUrls.set(asset.href, url);
+      }
+
+      const newChapters = result.chapters.map(ch => {
+        let content = ch.content;
+        // Basic replacement of internal hrefs with Object URLs
+        for (const [href, url] of this.assetUrls.entries()) {
+          // Replace both src="href" and src="../href" style references
+          const escapedHref = href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const regex = new RegExp(`src=["'](?:\\.\\./)*${escapedHref}["']`, 'g');
+          content = content.replace(regex, `src="${url}"`);
+        }
+
+        return {
+          ...ch,
+          id: `${file.name.replace(/\s+/g, '_')}-${ch.id}`,
+          source: file.name,
+          content,
+        };
+      });
+
+      // If we already have chapters, ask or assume we want to clear them for a new book?
+      // For now, let's keep the additive behavior but ensure the user knows.
+      if (this.chapters.length > 0) {
+        this.addLog('info', 'Appending new chapters to current project.');
+      }
+
       this.chapters = [...this.chapters, ...newChapters];
       this.metadata = result.metadata;
+
       if (this.selectedChapterIndex === -1 && this.chapters.length > 0) {
         this.selectedChapterIndex = 0;
       }
@@ -285,6 +337,37 @@ export class AppRoot extends LitElement {
     }
   }
 
+  private async handleSingleRefinement() {
+    if (this.selectedChapterIndex === -1) return;
+    this.isProcessing = true;
+    this.statusMessage = `Refining: ${this.chapters[this.selectedChapterIndex].title}`;
+    this.addLog('info', `Starting individual refinement: ${this.chapters[this.selectedChapterIndex].title}`);
+
+    try {
+      const refined = await this.batchRefinementService.refineChapter(
+        this.chapters[this.selectedChapterIndex].content,
+        (msg, type) => this.addLog(type, msg),
+      );
+
+      this.chapters[this.selectedChapterIndex] = {
+        ...this.chapters[this.selectedChapterIndex],
+        content: refined,
+      };
+      this.chapters = [...this.chapters];
+
+      // Sync local state with services
+      this.storyMemory = this.storyMemoryService.getMemory();
+      this.glossaryEntries = this.glossaryManager.getAllEntries();
+
+      this.addLog('success', 'Individual refinement complete.');
+    } catch (error) {
+      this.addLog('error', `Individual refinement failed: ${error}`);
+    } finally {
+      this.isProcessing = false;
+      this.statusMessage = '';
+    }
+  }
+
   private handleExportGlossary() {
     const json = this.glossaryManager.exportJson();
     const blob = new Blob([json], { type: 'application/json' });
@@ -303,13 +386,16 @@ export class AppRoot extends LitElement {
       return;
     }
 
-    // Filter out empty searches
-    const entryToSave = {
-      ...this.editingEntry,
-      searches: this.editingEntry.searches.filter(s => s.trim() !== ''),
-    };
+    const success = this.glossaryManager.upsertEntry(this.editingEntry);
 
-    this.glossaryManager.upsertEntry(entryToSave);
+    if (!success) {
+      this.addLog(
+        'error',
+        'Invalid entry: At least one search pattern distinct from the term is required.',
+      );
+      return;
+    }
+
     await this.glossaryManager.save();
 
     // Force immutable update for Lit detection
@@ -328,10 +414,7 @@ export class AppRoot extends LitElement {
 					.chapters=${this.chapters} 
 					.selectedIndex=${this.selectedChapterIndex}
 					@open-epub=${() => (this.shadowRoot?.getElementById('epub-upload') as HTMLInputElement | null)?.click()}
-					@close-project=${() => {
-            this.chapters = [];
-            this.selectedChapterIndex = -1;
-          }}
+					@close-project=${this.handleCloseProject}
 					@save-epub=${this.handleSaveEpub}
 					@select-chapter=${(e: CustomEvent<number>) => (this.selectedChapterIndex = e.detail)}
 					@trash-chapter=${(e: CustomEvent<number>) => this.handleTrashChapter(e.detail)}
@@ -385,9 +468,11 @@ export class AppRoot extends LitElement {
 					.totalSteps=${this.totalSteps}
 					.statusMessage=${this.statusMessage}
 					.hasChapters=${this.chapters.length > 0}
+					.hasSelectedChapter=${this.selectedChapterIndex !== -1}
 					@configure-ai=${() => (this.isConfigDialogOpen = true)}
 					@story-memory=${() => (this.isMemoryDialogOpen = true)}
 					@run-cleanup=${this.handleCleanup}
+					@run-single-refinement=${this.handleSingleRefinement}
 					@run-refinement=${this.handleRefineAll}
 					@toggle-pause=${() => (this.isPaused = !this.isPaused)}
 					@resume-next=${() => {

@@ -65,7 +65,7 @@ export class AiBridge {
   /**
    * Generic method to call the local AI with retry logic.
    */
-  async callAi(prompt: string, systemPrompt: string, useCache = true): Promise<string> {
+  async callAi(prompt: string, systemPrompt: string, useCache = false): Promise<string> {
     const config = this.configService.getConfig();
 
     const utf8SafeBase64 = (str: string) =>
@@ -74,7 +74,8 @@ export class AiBridge {
           String.fromCharCode(parseInt(p1, 16)),
         ),
       );
-    const cacheKey = `${this.CACHE_PREFIX}${utf8SafeBase64(prompt).substring(0, 32)}`;
+    // Include system prompt in cache key to avoid collisions between different tasks
+    const cacheKey = `${this.CACHE_PREFIX}${utf8SafeBase64(systemPrompt + prompt).substring(0, 48)}`;
 
     if (useCache) {
       const cached = await get<string>(cacheKey);

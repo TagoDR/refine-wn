@@ -1,4 +1,4 @@
-import type { Chapter, EpubMetadata } from './epub-service';
+import type { Chapter, EpubMetadata, ImageAsset } from './epub-service';
 
 export interface WorkerRequest {
   id: number;
@@ -39,8 +39,13 @@ export class EpubWorkerClient {
     };
   }
 
-  async load(data: Blob | ArrayBuffer): Promise<{ metadata: EpubMetadata; chapters: Chapter[] }> {
-    return this.send<{ metadata: EpubMetadata; chapters: Chapter[] }>('load', data);
+  async load(
+    data: Blob | ArrayBuffer,
+  ): Promise<{ metadata: EpubMetadata; chapters: Chapter[]; assets: ImageAsset[] }> {
+    return this.send<{ metadata: EpubMetadata; chapters: Chapter[]; assets: ImageAsset[] }>(
+      'load',
+      data,
+    );
   }
 
   async save(chapters: Chapter[]): Promise<Blob> {

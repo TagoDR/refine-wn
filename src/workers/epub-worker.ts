@@ -11,7 +11,8 @@ self.onmessage = async (e: MessageEvent) => {
         await epubService.load(payload);
         const metadata = await epubService.getMetadata();
         const chapters = await epubService.getChapters();
-        self.postMessage({ id, payload: { metadata, chapters } });
+        const assets = await epubService.getAssets();
+        self.postMessage({ id, payload: { metadata, chapters, assets } });
         break;
       }
       case 'save': {

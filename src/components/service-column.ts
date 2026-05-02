@@ -65,6 +65,7 @@ export class ServiceColumn extends LitElement {
   @property({ type: Number }) totalSteps = 0;
   @property({ type: String }) statusMessage = '';
   @property({ type: Boolean }) hasChapters = false;
+  @property({ type: Boolean }) hasSelectedChapter = false;
 
   render() {
     return html`
@@ -98,10 +99,10 @@ export class ServiceColumn extends LitElement {
 				</wa-card>
 
 				<wa-card class="service-card">
-					<div slot="header">2. Glossary Extraction</div>
-					<p style="font-size: var(--wa-font-size-xs); margin-bottom: var(--wa-space-s);">Automatically extract names and terms from ALL chapters.</p>
-					<wa-button size="small" variant="brand" style="width:100%;" @click=${() => this.dispatchEvent(new CustomEvent('run-extraction'))} ?disabled=${this.isProcessing || !this.hasChapters}>
-						<wa-icon name="wand-magic-sparkles" slot="prefix"></wa-icon> Extract Terms
+					<div slot="header">2. Individual Refinement</div>
+					<p style="font-size: var(--wa-font-size-xs); margin-bottom: var(--wa-space-s);">Refine ONLY the currently selected chapter.</p>
+					<wa-button size="small" variant="brand" appearance="accent" style="width:100%;" @click=${() => this.dispatchEvent(new CustomEvent('run-single-refinement'))} ?disabled=${this.isProcessing || !this.hasSelectedChapter}>
+						<wa-icon name="bullseye" slot="prefix"></wa-icon> Refine Current
 					</wa-button>
 				</wa-card>
 
