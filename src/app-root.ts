@@ -308,32 +308,43 @@ export class AppRoot extends LitElement {
       this.totalSteps = total;
 
       for (let i = this.currentStep; i < total; i++) {
-        if (this.isPaused) return;
+        // Check for manual pause
+        if (this.isPaused) {
+          this.isProcessing = false;
+          return;
+        }
+
         this.currentStep = i;
         this.progress = (i / total) * 100;
         this.statusMessage = `Refining: ${this.chapters[i].title}`;
 
-        const refined = await this.batchRefinementService.refineChapter(
-          this.chapters[i].content,
-          (msg, type) => this.addLog(type, msg),
-        );
+        try {
+          const refined = await this.batchRefinementService.refineChapter(
+            this.chapters[i].content,
+            (msg, type) => this.addLog(type, msg),
+          );
 
-        this.chapters[i] = { ...this.chapters[i], content: refined };
+          this.chapters[i] = { ...this.chapters[i], content: refined };
 
-        // Sync local state with services
-        this.storyMemory = this.storyMemoryService.getMemory();
-        this.glossaryEntries = this.glossaryManager.getAllEntries();
+          // Sync local state with services
+          this.storyMemory = this.storyMemoryService.getMemory();
+          this.glossaryEntries = this.glossaryManager.getAllEntries();
 
-        if (i % 2 === 0) this.chapters = [...this.chapters];
+          if (i % 2 === 0) this.chapters = [...this.chapters];
+        } catch (error) {
+          this.isPaused = true;
+          this.addLog('error', `AI Error: ${error}. Process paused.`);
+          return; // Exit loop on AI failure
+        }
       }
       this.chapters = [...this.chapters];
       this.currentStep = 0;
     } catch (error) {
-      this.addLog('error', `Refinement failed: ${error}`);
+      this.addLog('error', `Critical refinement failure: ${error}`);
     } finally {
       this.isProcessing = false;
-      this.statusMessage = '';
-      this.progress = 0;
+      this.statusMessage = this.isPaused ? 'Paused' : '';
+      if (!this.isPaused) this.progress = 0;
     }
   }
 
@@ -562,7 +573,11 @@ export class AppRoot extends LitElement {
 				<wa-button slot="footer" variant="brand" @click=${() => {
           this.storyMemoryService.save(this.storyMemory);
           this.isMemoryDialogOpen = false;
-        }} ?disabled=${this.isProcessing}>Update Memory</wa-button>
+          if (this.isProcessing) {
+            this.isPaused = true;
+            this.addLog('info', 'Memory updated. Process paused to allow retry of current chapter.');
+          }
+        }} ?disabled=${this.isProcessing && !this.isPaused}>Update Memory</wa-button>
 			</wa-dialog>
 
 			<!-- Glossary Edit Dialog -->

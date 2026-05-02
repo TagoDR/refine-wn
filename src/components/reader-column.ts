@@ -67,6 +67,15 @@ export class ReaderColumn extends LitElement {
   @property({ type: Boolean }) diffMode = false;
   @property({ type: Array }) logs: LogEntry[] = [];
 
+  updated(changedProperties: Map<string, any>) {
+    if (changedProperties.has('logs')) {
+      const consoleLogs = this.shadowRoot?.querySelector('.console-logs');
+      if (consoleLogs) {
+        consoleLogs.scrollTop = consoleLogs.scrollHeight;
+      }
+    }
+  }
+
   render() {
     return html`
 			<div class="reader-area" style="${this.diffMode ? 'overflow:hidden; display:flex; flex-direction:column;' : ''}">
