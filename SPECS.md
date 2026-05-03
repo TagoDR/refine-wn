@@ -20,18 +20,24 @@
 
 - **Functional Core, Imperative Shell:** Keep parsing logic (EPUB/Text) pure and decoupled from Lit components.
 - **Maintenance First:**
-  - Use `idb-keyval` for persistent settings and AI result caching.
-- **Web Workers:** All CPU-intensive tasks (EPUB parsing/compression) run in a Worker.
-- **CSS:** Use WebAwesome tokens (`--wa-color-surface-*`, etc.) to ensure dark mode compatibility.
+  - Use `idb-keyval` for persistent settings, story memory, and terminology.
+  - `BatchRefinementService`: Centralized orchestrator for the refinement pipeline, handling text cleaning, sequential chunking, and state synchronization.
+- **Web Workers:** All CPU-intensive tasks (EPUB parsing/compression) run in a Worker to maintain UI responsiveness.
+- **CSS:** Use WebAwesome tokens (`--wa-color-surface-*`, etc.) for robust dark mode support.
 
 ## 3. Local AI Integration (LM Studio)
 
-- **Transport:** Standard `fetch` to `http://localhost:5004/v1/chat/completions` (OpenAI format) with fallback to `/v1/responses`.
-- **Error Handling:** Robust retry logic for "Server Busy".
-- **Logging:** Integrated Process Console in the UI for real-time tracking of AI requests and errors.
-- **Features:**
-  - **Glossary-aware prose refinement:** Context-sensitive terminology replacement.
-  - **Per-EPUB Bidirectional Cleanup:** Prunes junk chapters (Covers, TOC, etc.) from start and end of each book until the first valid story prose is identified.
-  - **Interactive Refinement Flow:** Pause-able processing with "Resume Next" and "Retry Chapter" (with updated memory) capabilities.
-  - **Live Narrative Context:** AI-driven "Story Memory" that updates in real-time and allows manual editing when paused.
-  - **Name and entity extraction:** Automated glossary building from chapter snippets.
+- **Transport:** Standard `fetch` to OpenAI-compatible endpoints.
+- **Dynamic Context**: Sequential processing of chapter chunks allows updating the Story Memory and Glossary *mid-chapter*, ensuring the AI learns from the beginning of a chapter before processing the end.
+- **Safety & Control:**
+  - Automatic pausing on AI errors or manual context updates.
+  - "Discard" functionality to revert chapters to original MTL.
+  - Strict Glossary Validation: Redundant or empty entries are discarded.
+- **Logging:** Autoscrolling Process Console for real-time developer-grade tracking.
+
+## 4. Asset Management (Images)
+
+- **Extraction**: `EpubService` identifies and extracts all binary assets (images, fonts, styles) from the EPUB container.
+- **Live Serving**: Temporary **Object URLs** are generated for assets during a session, allowing images to render correctly in the reader.
+- **Path Resolution**: Internal EPUB paths (e.g., `../images/cover.jpg`) are mapped to Object URLs on import and **restored to internal paths** on export.
+- **Persistence**: Refined EPUBs maintain the original folder structure and all non-text assets from the source file.
