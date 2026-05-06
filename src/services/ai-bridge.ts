@@ -5,6 +5,7 @@ import glossaryArchitectPrompt from '../instructions/glossary-architect.md?raw';
 import memoryHistorianPrompt from '../instructions/memory-historian.md?raw';
 import narrativePolisherPrompt from '../instructions/narrative-polisher.md?raw';
 import consolidatedRefinementPrompt from '../instructions/consolidated-refinement.md?raw';
+import glossaryTidierPrompt from '../instructions/glossary-tidier.md?raw';
 import type { ConfigService } from './config-service';
 
 export interface AiResponse {
@@ -22,6 +23,13 @@ export interface ConsolidatedResult {
   refinedText: string;
   extractedTerms: ExtractedTerm[];
   updatedMemory: string;
+}
+
+export interface TidyResult {
+  movedToCharacters: { termId: string; suggestedCharacter: any }[];
+  mergedTerms: { idsToMerge: string[]; finalEntry: any }[];
+  mergedCharacters: { idsToMerge: string[]; finalCharacter: any }[];
+  deletedIds: string[];
 }
 
 export class AiBridge {
@@ -338,6 +346,43 @@ export class AiBridge {
       extractedTerms,
       updatedMemory,
     };
+  }
+
+  /**
+   * Reviews and tidies glossaries.
+   */
+  async tidyGlossaries(
+    glossaryContext: string,
+    characterContext: string,
+    knowledgeBaseContext: string,
+  ): Promise<TidyResult> {
+    this.log('Starting background glossary tidying...', 'info');
+    const prompt = glossaryTidierPrompt
+      .replace('{{glossary}}', glossaryContext)
+      .replace('{{characters}}', characterContext)
+      .replace('{{knowledge_base}}', knowledgeBaseContext);
+
+    const response = await this.callAi(
+      prompt,
+      'You are a helpful assistant that only outputs valid JSON.',
+      false,
+    );
+
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]) as TidyResult;
+      }
+      throw new Error('No JSON object found in tidier response.');
+    } catch (e) {
+      this.log(`Failed to parse Glossary Tidier output: ${e}`, 'error');
+      return {
+        movedToCharacters: [],
+        mergedTerms: [],
+        mergedCharacters: [],
+        deletedIds: [],
+      };
+    }
   }
 
   private extractBlock(text: string, tag: string): string | null {

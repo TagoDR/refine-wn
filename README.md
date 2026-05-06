@@ -17,6 +17,7 @@ RefineWN is a specialized local workstation designed for translating and polishi
 - **Optimized Refinement**: High-efficiency consolidated AI pass that refines prose, identifies characters, and updates story memory in a single turn.
 - **Unified Diff View**: Clear, color-coded comparison of prose changes (Additions vs. Deletions) with HTML tags hidden for readability.
 - **Visual Progress Tracking**: Real-time status indicators (Spinner/Checkmark) in the chapter list to monitor refinement progress.
+- **Background Glossary Tidier**: A concurrent background worker that reviews, merges, and tidies terminology and characters without interrupting refinement.
 - **AI Auto-Reload**: Support for LM Studio's Model Management API to automatically reload models if they are unloaded during long sessions.
 - **Local AI Integration**: Compatible with any OpenAI-compliant API (LM Studio, Ollama, etc.).
 - **Process Console**: Real-time logging of all AI interactions and system processes.

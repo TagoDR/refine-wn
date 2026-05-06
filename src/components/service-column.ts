@@ -66,6 +66,7 @@ export class ServiceColumn extends LitElement {
   @property({ type: String }) statusMessage = '';
   @property({ type: Boolean }) hasChapters = false;
   @property({ type: Boolean }) hasSelectedChapter = false;
+  @property({ type: Boolean }) isTidying = false;
 
   render() {
     return html`
@@ -73,6 +74,16 @@ export class ServiceColumn extends LitElement {
 				<div class="header-title">SERVICES</div>
 			</div>
 			<div class="scroll-content">
+				<wa-card class="service-card">
+					<div slot="header">Background Workers</div>
+					<p style="font-size: var(--wa-font-size-xs); margin-bottom: var(--wa-space-s);">Tidy glossaries, merge duplicates, and move people to the Character Glossary.</p>
+					<wa-button size="small" variant="brand" outline style="width:100%;" @click=${() =>
+            this.dispatchEvent(new CustomEvent('run-tidier'))} ?disabled=${this.isTidying}>
+						<wa-icon name="recycle" slot="prefix"></wa-icon> 
+						${this.isTidying ? 'Tidying...' : 'Tidy Glossaries'}
+					</wa-button>
+				</wa-card>
+
 				<wa-card class="service-card">
 					<div slot="header">Portability</div>
 					<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px;">

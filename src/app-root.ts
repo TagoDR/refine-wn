@@ -55,6 +55,7 @@ export class AppRoot extends LitElement {
   @state() private currentStep = 0;
   @state() private totalSteps = 0;
   @state() private statusMessage = '';
+  @state() private isTidying = false;
   @state() private diffMode = false;
   @state() private logs: LogEntry[] = [];
 
@@ -497,6 +498,90 @@ export class AppRoot extends LitElement {
     }
   }
 
+  private async handleTidyGlossaries() {
+    this.addLog('info', 'Starting background glossary tidying...');
+    try {
+      const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
+      const characterContext = this.characterService.getAiContext();
+      const pkbContext = this.knowledgeBaseService.getKnowledgeBase();
+
+      const result = await this.aiBridge.tidyGlossaries(
+        glossaryContext,
+        characterContext,
+        pkbContext,
+      );
+
+      let changesMade = false;
+
+      // 1. Handle moves to Characters
+      if (result.movedToCharacters.length > 0) {
+        for (const move of result.movedToCharacters) {
+          const entry = this.glossaryManager.getAllEntries().find(e => e.id === move.termId);
+          if (entry) {
+            this.characterService.upsert({
+              id: crypto.randomUUID(),
+              ...move.suggestedCharacter,
+            });
+            this.glossaryManager.deleteEntry(move.termId);
+            changesMade = true;
+          }
+        }
+        this.addLog('success', `Moved ${result.movedToCharacters.length} terms to Character Glossary.`);
+      }
+
+      // 2. Handle Merged Terms
+      if (result.mergedTerms.length > 0) {
+        for (const merge of result.mergedTerms) {
+          this.glossaryManager.upsertEntry({
+            id: crypto.randomUUID(),
+            ...merge.finalEntry,
+          });
+          for (const oldId of merge.idsToMerge) {
+            this.glossaryManager.deleteEntry(oldId);
+          }
+          changesMade = true;
+        }
+        this.addLog('success', `Merged ${result.mergedTerms.length} terminology entries.`);
+      }
+
+      // 3. Handle Merged Characters
+      if (result.mergedCharacters.length > 0) {
+        for (const merge of result.mergedCharacters) {
+          this.characterService.upsert({
+            id: crypto.randomUUID(),
+            ...merge.finalCharacter,
+          });
+          for (const oldId of merge.idsToMerge) {
+            this.characterService.delete(oldId);
+          }
+          changesMade = true;
+        }
+        this.addLog('success', `Merged ${result.mergedCharacters.length} character entries.`);
+      }
+
+      // 4. Handle Deletions
+      if (result.deletedIds.length > 0) {
+        for (const id of result.deletedIds) {
+          this.glossaryManager.deleteEntry(id);
+          this.characterService.delete(id);
+        }
+        changesMade = true;
+        this.addLog('info', `Deleted ${result.deletedIds.length} redundant entries.`);
+      }
+
+      if (changesMade) {
+        await this.glossaryManager.save();
+        await this.characterService.save();
+        this.syncLocalState();
+        this.addLog('success', 'Glossary tidying complete.');
+      } else {
+        this.addLog('info', 'Glossary is already tidy. No changes suggested.');
+      }
+    } catch (error) {
+      this.addLog('error', `Glossary tidying failed: ${error}`);
+    }
+  }
+
   render() {
     return html`
 			<div class="app-grid">
@@ -580,6 +665,7 @@ export class AppRoot extends LitElement {
 					.statusMessage=${this.statusMessage}
 					.hasChapters=${this.chapters.length > 0}
 					.hasSelectedChapter=${this.selectedChapterIndex !== -1}
+					.isTidying=${this.isTidying}
 					@configure-ai=${() => (this.isConfigDialogOpen = true)}
 					@test-ai=${this.handleTestConnection}
 					@story-memory=${() => (this.isMemoryDialogOpen = true)}
@@ -592,6 +678,7 @@ export class AppRoot extends LitElement {
             this.handleRefineAll();
           }}
 					@retry-chapter=${this.handleRefineAll}
+					@run-tidier=${this.handleTidyGlossaries}
 					@import-glossary=${() => (this.shadowRoot?.getElementById('glossary-import') as HTMLInputElement | null)?.click()}
 					@export-glossary=${this.handleExportGlossary}
 					@clear-glossary=${async () => {

@@ -36,6 +36,16 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
 - **Workflow:** Performs **Bidirectional Scans** on each imported EPUB to identify junk chapters (Covers, TOCs, ads).
 - **Output:** Boolean removal decisions with rationale.
 
+### 3. The Glossary Tidier (Background Worker)
+
+**Goal:** Maintain the integrity and organization of project metadata concurrently.
+
+- **Workflow:** Runs in the background (concurrently with refinement). It:
+  1.  **Deduplicates:** Identifies and merges redundant terms or characters.
+  2.  **Reorganizes:** Moves misplaced people from the Term Glossary to the Character Glossary.
+  3.  **Standardizes:** Updates entities to match the Project Knowledge Base.
+- **Concurrency:** Designed to use a second AI processing slot, ensuring refinement remains uninterrupted while metadata is polished.
+
 ---
 
 ## Technical Architecture
@@ -43,6 +53,5 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
 - **UI:** Lit + WebAwesome + CSS Grid (5-Column Layout).
 - **Processing:** JSZip + Linkedom (Surgical XML/HTML manipulation).
 - **Storage:** IndexedDB (`idb-keyval`) for terminology, memory, and config persistence.
-- **AI Integration:** Local fetch calls to OpenAI-compatible endpoints with **Auto-Reload** support for LM Studio.
-- **Optimization:** Multi-task single-turn AI calls with context-aware lenient normalization.
-- **Validation:** Real-time **Unified Diff** for prose verification and visual status tracking.
+- **AI Integration:** Local fetch calls with support for **2+ Concurrent Requests** and **Auto-Reload** for LM Studio.
+- **Optimization:** Multi-task single-turn AI calls with background metadata management.
