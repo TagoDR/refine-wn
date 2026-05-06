@@ -68,6 +68,38 @@ export class ChapterColumn extends LitElement {
 			color: white;
 		}
 
+		.chapter-status {
+			margin-right: var(--wa-space-xs);
+			display: flex;
+			align-items: center;
+		}
+
+		.spinner {
+			width: 12px;
+			height: 12px;
+			border: 2px solid rgba(255,255,255,0.3);
+			border-radius: 50%;
+			border-top-color: #fff;
+			animation: spin 1s ease-in-out infinite;
+		}
+
+		.spinner-dark {
+			border-color: rgba(0,0,0,0.1);
+			border-top-color: var(--wa-color-brand-60);
+		}
+
+		@keyframes spin {
+			to { transform: rotate(360deg); }
+		}
+
+		.check-icon {
+			color: var(--wa-color-success-60);
+		}
+
+		.selected .check-icon {
+			color: white;
+		}
+
 		.trash-btn {
 			opacity: 0.6;
 			transition: opacity 0.2s;
@@ -105,6 +137,15 @@ export class ChapterColumn extends LitElement {
 				${this.chapters.map(
           (ch, i) => html`
 					<div class="chapter-item ${this.selectedIndex === i ? 'selected' : ''}" @click=${() => this.dispatchEvent(new CustomEvent<number>('select-chapter', { detail: i }))}>
+						<div class="chapter-status">
+							${
+                ch.status === 'processing'
+                  ? html`<div class="spinner ${this.selectedIndex === i ? '' : 'spinner-dark'}"></div>`
+                  : ch.status === 'completed'
+                    ? html`<span class="check-icon">✓</span>`
+                    : ''
+              }
+						</div>
 						<span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1;">
 							${ch.title || `Chapter ${i + 1}`}
 						</span>

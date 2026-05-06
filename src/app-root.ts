@@ -366,12 +366,19 @@ export class AppRoot extends LitElement {
         this.statusMessage = `Refining: ${this.chapters[i].title}`;
 
         try {
+          this.chapters[i] = { ...this.chapters[i], status: 'processing' };
+          this.chapters = [...this.chapters];
+
           const refined = await this.batchRefinementService.refineChapter(
             this.chapters[i].content,
             (msg, type) => this.addLog(type, msg),
           );
 
-          this.chapters[i] = { ...this.chapters[i], content: refined };
+          this.chapters[i] = {
+            ...this.chapters[i],
+            content: refined,
+            status: 'completed',
+          };
 
           this.syncLocalState();
 
@@ -400,6 +407,12 @@ export class AppRoot extends LitElement {
     this.addLog('info', `Starting individual refinement: ${this.chapters[this.selectedChapterIndex].title}`);
 
     try {
+      this.chapters[this.selectedChapterIndex] = {
+        ...this.chapters[this.selectedChapterIndex],
+        status: 'processing',
+      };
+      this.chapters = [...this.chapters];
+
       const refined = await this.batchRefinementService.refineChapter(
         this.chapters[this.selectedChapterIndex].content,
         (msg, type) => this.addLog(type, msg),
@@ -408,6 +421,7 @@ export class AppRoot extends LitElement {
       this.chapters[this.selectedChapterIndex] = {
         ...this.chapters[this.selectedChapterIndex],
         content: refined,
+        status: 'completed',
       };
       this.chapters = [...this.chapters];
 

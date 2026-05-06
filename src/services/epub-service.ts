@@ -8,6 +8,7 @@ export interface Chapter {
   content: string;
   source?: string;
   originalContent?: string;
+  status?: 'pending' | 'processing' | 'completed';
 }
 
 export interface ImageAsset {
