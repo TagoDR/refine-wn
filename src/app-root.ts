@@ -8,7 +8,10 @@ import { EpubWorkerClient } from './services/epub-worker-client';
 import { type GlossaryEntry, GlossaryManager } from './services/glossary-manager';
 import { StoryMemoryService } from './services/story-memory';
 import { TextCleaner } from './services/text-cleaner';
-import type { LogEntry } from './types';
+import { CharacterService } from './services/character-service';
+import { KnowledgeBaseService } from './services/knowledge-base';
+import { PortabilityService } from './services/portability-service';
+import type { LogEntry, Character } from './types';
 
 // Modular Column Components
 import './components/chapter-column';
@@ -44,6 +47,7 @@ export class AppRoot extends LitElement {
   @state() private metadata: EpubMetadata | null = null;
   @state() private selectedChapterIndex = -1;
   @state() private glossaryEntries: GlossaryEntry[] = [];
+  @state() private characters: Character[] = [];
   @state() private isProcessing = false;
   @state() private isPaused = false;
   @state() private progress = 0;
@@ -56,21 +60,36 @@ export class AppRoot extends LitElement {
   @state() private isGlossaryDialogOpen = false;
   @state() private isConfigDialogOpen = false;
   @state() private isMemoryDialogOpen = false;
+  @state() private isCharacterDialogOpen = false;
+  @state() private isKnowledgeBaseDialogOpen = false;
+
   @state() private editingEntry: GlossaryEntry | null = null;
+  @state() private editingCharacter: Character | null = null;
   @state() private currentConfig: AppConfig | null = null;
   @state() private storyMemory = '';
+  @state() private knowledgeBase = '';
 
   private epubClient = new EpubWorkerClient();
   private configService = new ConfigService();
   private aiBridge = new AiBridge(this.configService);
   private glossaryManager = new GlossaryManager();
   private storyMemoryService = new StoryMemoryService();
+  private characterService = new CharacterService();
+  private knowledgeBaseService = new KnowledgeBaseService();
+  private portabilityService = new PortabilityService(
+    this.glossaryManager,
+    this.characterService,
+    this.storyMemoryService,
+    this.knowledgeBaseService,
+  );
   private textCleaner = new TextCleaner();
   private batchRefinementService = new BatchRefinementService(
     this.aiBridge,
     this.storyMemoryService,
     this.glossaryManager,
     this.configService,
+    this.characterService,
+    this.knowledgeBaseService,
   );
 
   private addLog(type: LogEntry['type'], message: string) {
@@ -82,31 +101,48 @@ export class AppRoot extends LitElement {
     this.currentConfig = await this.configService.load();
     await this.glossaryManager.load();
     this.storyMemory = await this.storyMemoryService.load();
+    this.characters = await this.characterService.load();
+    this.knowledgeBase = await this.knowledgeBaseService.load();
 
-    // Auto-load test glossary for faster testing if empty (Dev only)
+    // Auto-load test settings for faster testing if empty (Dev only)
     if (import.meta.env.DEV && this.glossaryManager.getAllEntries().length === 0) {
       try {
-        const response = await fetch('/test/test-glossary.json');
+        const response = await fetch('/test/test-settings.json');
         if (response.ok) {
-          const testGlossary = (await response.json()) as Omit<GlossaryEntry, 'id'>[];
-          for (const entry of testGlossary) {
-            this.glossaryManager.upsertEntry({
-              ...entry,
-              id: crypto.randomUUID(),
-            });
+          const testSettings = await response.json();
+          await this.portabilityService.importProject(JSON.stringify(testSettings));
+          this.syncLocalState();
+          this.addLog('success', 'Auto-loaded test settings.');
+        } else {
+          // Fallback to old glossary logic if settings.json not found
+          const oldGlossaryResp = await fetch('/test/test-glossary.json');
+          if (oldGlossaryResp.ok) {
+            const testGlossary = await oldGlossaryResp.json();
+            for (const entry of testGlossary) {
+              this.glossaryManager.upsertEntry({ ...entry, id: crypto.randomUUID() });
+            }
+            await this.glossaryManager.save();
+            this.glossaryEntries = this.glossaryManager.getAllEntries();
           }
-          await this.glossaryManager.save();
         }
       } catch (_e) {
-        console.warn('Test glossary file not found, skipping auto-import.');
+        console.warn('Test settings file not found, skipping auto-import.');
       }
     }
 
-    this.glossaryEntries = this.glossaryManager.getAllEntries();
+    this.syncLocalState();
 
     if (import.meta.env.DEV) {
       await this.autoLoadTestEpub();
     }
+  }
+
+  private syncLocalState() {
+    this.glossaryEntries = this.glossaryManager.getAllEntries();
+    this.characters = this.characterService.getAll();
+    this.storyMemory = this.storyMemoryService.getMemory();
+    this.knowledgeBase = this.knowledgeBaseService.getKnowledgeBase();
+    this.requestUpdate();
   }
 
   private async autoLoadTestEpub() {
@@ -125,7 +161,6 @@ export class AppRoot extends LitElement {
   private assetUrls: Map<string, string> = new Map();
 
   private handleCloseProject() {
-    // Revoke and clear asset URLs to prevent memory leaks and state contamination
     for (const url of this.assetUrls.values()) {
       URL.revokeObjectURL(url);
     }
@@ -145,14 +180,12 @@ export class AppRoot extends LitElement {
     this.addLog('info', `Importing EPUB: ${file.name}`);
 
     try {
-      // Clear existing project state before loading a new one
       if (this.chapters.length > 0) {
         this.handleCloseProject();
       }
 
       const result = await this.epubClient.load(file);
 
-      // Create object URLs for assets (images)
       for (const asset of result.assets) {
         const blob = new Blob([asset.content as BlobPart], { type: asset.mediaType });
         const url = URL.createObjectURL(blob);
@@ -161,9 +194,7 @@ export class AppRoot extends LitElement {
 
       const newChapters = result.chapters.map(ch => {
         let content = ch.content;
-        // Basic replacement of internal hrefs with Object URLs
         for (const [href, url] of this.assetUrls.entries()) {
-          // Replace both src="href" and src="../href" style references
           const escapedHref = href.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           const regex = new RegExp(`src=["'](?:\\.\\./)*${escapedHref}["']`, 'g');
           content = content.replace(regex, `src="${url}"`);
@@ -177,8 +208,6 @@ export class AppRoot extends LitElement {
         };
       });
 
-      // If we already have chapters, ask or assume we want to clear them for a new book?
-      // For now, let's keep the additive behavior but ensure the user knows.
       if (this.chapters.length > 0) {
         this.addLog('info', 'Appending new chapters to current project.');
       }
@@ -202,11 +231,9 @@ export class AppRoot extends LitElement {
     this.addLog('info', 'Generating refined EPUB...');
     let url = '';
     try {
-      // Swap Object URLs back to internal EPUB paths before saving
       const chaptersToSave = this.chapters.map(ch => {
         let content = ch.content;
         for (const [href, blobUrl] of this.assetUrls.entries()) {
-          // Use a simple global replacement for the specific blob URL
           const regex = new RegExp(blobUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
           content = content.replace(regex, href);
         }
@@ -319,7 +346,6 @@ export class AppRoot extends LitElement {
       this.totalSteps = total;
 
       for (let i = this.currentStep; i < total; i++) {
-        // Check for manual pause
         if (this.isPaused) {
           this.isProcessing = false;
           return;
@@ -337,15 +363,13 @@ export class AppRoot extends LitElement {
 
           this.chapters[i] = { ...this.chapters[i], content: refined };
 
-          // Sync local state with services
-          this.storyMemory = this.storyMemoryService.getMemory();
-          this.glossaryEntries = this.glossaryManager.getAllEntries();
+          this.syncLocalState();
 
           if (i % 2 === 0) this.chapters = [...this.chapters];
         } catch (error) {
           this.isPaused = true;
           this.addLog('error', `AI Error: ${error}. Process paused.`);
-          return; // Exit loop on AI failure
+          return;
         }
       }
       this.chapters = [...this.chapters];
@@ -377,9 +401,7 @@ export class AppRoot extends LitElement {
       };
       this.chapters = [...this.chapters];
 
-      // Sync local state with services
-      this.storyMemory = this.storyMemoryService.getMemory();
-      this.glossaryEntries = this.glossaryManager.getAllEntries();
+      this.syncLocalState();
 
       this.addLog('success', 'Individual refinement complete.');
     } catch (error) {
@@ -391,15 +413,15 @@ export class AppRoot extends LitElement {
   }
 
   private handleExportGlossary() {
-    const json = this.glossaryManager.exportJson();
+    const json = this.portabilityService.exportProject();
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'glossary.json';
+    a.download = `refinewn_settings_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    this.addLog('info', 'Glossary exported.');
+    this.addLog('info', 'Project settings exported.');
   }
 
   private async handleSaveGlossary() {
@@ -419,14 +441,35 @@ export class AppRoot extends LitElement {
     }
 
     await this.glossaryManager.save();
-
-    // Force immutable update for Lit detection
-    this.glossaryEntries = [...this.glossaryManager.getAllEntries()];
+    this.syncLocalState();
 
     this.isGlossaryDialogOpen = false;
     this.editingEntry = null;
     this.addLog('success', 'Glossary entry saved.');
-    this.requestUpdate();
+  }
+
+  private async handleSaveCharacter() {
+    if (!this.editingCharacter?.name) {
+      this.addLog('error', 'Character name is required.');
+      return;
+    }
+
+    this.characterService.upsert(this.editingCharacter);
+    await this.characterService.save();
+    this.syncLocalState();
+
+    this.isCharacterDialogOpen = false;
+    this.editingCharacter = null;
+    this.addLog('success', 'Character saved.');
+  }
+
+  private async handleDeleteCharacter(id: string) {
+    if (confirm('Are you sure you want to delete this character?')) {
+      this.characterService.delete(id);
+      await this.characterService.save();
+      this.syncLocalState();
+      this.addLog('info', 'Character deleted.');
+    }
   }
 
   render() {
@@ -444,6 +487,7 @@ export class AppRoot extends LitElement {
 
 				<glossary-column
 					.entries=${this.glossaryEntries}
+					.characters=${this.characters}
 					@add-entry=${() => {
             this.editingEntry = {
               id: crypto.randomUUID(),
@@ -452,27 +496,45 @@ export class AppRoot extends LitElement {
               category: 'Other',
             };
             this.isGlossaryDialogOpen = true;
-            this.requestUpdate();
           }}
 					@edit-entry=${(e: CustomEvent<GlossaryEntry>) => {
             this.editingEntry = { ...e.detail };
             this.isGlossaryDialogOpen = true;
-            this.requestUpdate();
           }}
 					@delete-entry=${async (e: CustomEvent<string>) => {
             this.glossaryManager.deleteEntry(e.detail);
             await this.glossaryManager.save();
-            this.glossaryEntries = this.glossaryManager.getAllEntries();
+            this.syncLocalState();
           }}
 					@clear-glossary=${async () => {
-            if (confirm('Are you sure you want to clear the entire glossary?')) {
+            if (confirm('Are you sure you want to clear all settings? Use Export first if unsure.')) {
               await this.glossaryManager.clear();
-              this.glossaryEntries = this.glossaryManager.getAllEntries();
-              this.addLog('info', 'Glossary cleared.');
+              await this.characterService.clear();
+              await this.storyMemoryService.clear();
+              await this.knowledgeBaseService.clear();
+              this.syncLocalState();
+              this.addLog('info', 'All settings cleared.');
             }
           }}
 					@import-glossary=${() => (this.shadowRoot?.getElementById('glossary-import') as HTMLInputElement | null)?.click()}
 					@export-glossary=${this.handleExportGlossary}
+					@add-character=${() => {
+            this.editingCharacter = {
+              id: crypto.randomUUID(),
+              name: '',
+              aliases: [],
+              gender: '',
+              category: 'Supporting',
+              affiliation: '',
+              relationships: '',
+            };
+            this.isCharacterDialogOpen = true;
+          }}
+					@edit-character=${(e: CustomEvent<Character>) => {
+            this.editingCharacter = { ...e.detail };
+            this.isCharacterDialogOpen = true;
+          }}
+					@delete-character=${(e: CustomEvent<string>) => this.handleDeleteCharacter(e.detail)}
 				></glossary-column>
 
 				<reader-column
@@ -513,7 +575,15 @@ export class AppRoot extends LitElement {
             this.handleRefineAll();
           }}
 					@retry-chapter=${this.handleRefineAll}
-				></service-column>
+				>
+					<wa-card class="service-card" slot="extra">
+						<div slot="header">Project Knowledge Base</div>
+						<wa-button size="small" variant="brand" style="width:100%;" @click=${() =>
+              (this.isKnowledgeBaseDialogOpen = true)}>
+							<wa-icon name="book" slot="prefix"></wa-icon> Edit Knowledge Base
+						</wa-button>
+					</wa-card>
+				</service-column>
 			</div>
 
 			<input type="file" id="epub-upload" accept=".epub" style="display: none" @change=${(
@@ -527,8 +597,13 @@ export class AppRoot extends LitElement {
       ) => {
         const input = e.target as HTMLInputElement;
         if (input.files?.[0]) {
-          this.glossaryManager.importJson(await input.files[0].text());
-          this.glossaryEntries = this.glossaryManager.getAllEntries();
+          try {
+            await this.portabilityService.importProject(await input.files[0].text());
+            this.syncLocalState();
+            this.addLog('success', 'Project settings imported.');
+          } catch (err) {
+            this.addLog('error', `Import failed: ${err}`);
+          }
         }
       }}>
 
@@ -579,10 +654,6 @@ export class AppRoot extends LitElement {
         if (e.target === e.currentTarget) this.isMemoryDialogOpen = false;
       }}>
 				<div style="display: flex; flex-direction: column; gap: var(--wa-space-m);">
-					<p style="font-size: var(--wa-font-size-xs); color: var(--wa-color-text-quiet);">
-						${this.isProcessing ? 'Memory is being updated by AI... (Pause to edit manually)' : 'Edit narrative context to guide the AI.'}
-					</p>
-					
 					<wa-textarea 
 						label="Current Narrative Context" 
 						rows="15" 
@@ -595,11 +666,28 @@ export class AppRoot extends LitElement {
 				<wa-button slot="footer" variant="brand" @click=${() => {
           this.storyMemoryService.save(this.storyMemory);
           this.isMemoryDialogOpen = false;
-          if (this.isProcessing) {
-            this.isPaused = true;
-            this.addLog('info', 'Memory updated. Process paused to allow retry of current chapter.');
-          }
-        }} ?disabled=${this.isProcessing && !this.isPaused}>Update Memory</wa-button>
+        }}>Update Memory</wa-button>
+			</wa-dialog>
+
+			<!-- Project Knowledge Base Dialog -->
+			<wa-dialog label="Project Knowledge Base" ?open=${this.isKnowledgeBaseDialogOpen} style="--width: 80vw;" @wa-after-hide=${(
+        e: Event,
+      ) => {
+        if (e.target === e.currentTarget) this.isKnowledgeBaseDialogOpen = false;
+      }}>
+				<div style="display: flex; flex-direction: column; gap: var(--wa-space-m);">
+					<wa-textarea 
+						label="World Lore & Style Guide" 
+						rows="20" 
+						.value=${this.knowledgeBase} 
+						@input=${(e: Event) => (this.knowledgeBase = (e.target as HTMLTextAreaElement).value)} 
+						help-text="Static information that guides the AI across the entire book.">
+					</wa-textarea>
+				</div>
+				<wa-button slot="footer" variant="brand" @click=${() => {
+          this.knowledgeBaseService.save(this.knowledgeBase);
+          this.isKnowledgeBaseDialogOpen = false;
+        }}>Save Knowledge Base</wa-button>
 			</wa-dialog>
 
 			<!-- Glossary Edit Dialog -->
@@ -669,8 +757,7 @@ export class AppRoot extends LitElement {
               e: Event,
             ) => {
               if (this.editingEntry) {
-                this.editingEntry.category = (e.target as HTMLSelectElement)
-                  .value as GlossaryEntry['category'];
+                this.editingEntry.category = (e.target as any).value;
                 this.requestUpdate();
               }
             }}>
@@ -681,6 +768,93 @@ export class AppRoot extends LitElement {
             : ''
         }
 				<wa-button slot="footer" variant="brand" @click=${() => this.handleSaveGlossary()}>Save Entry</wa-button>
+			</wa-dialog>
+
+			<!-- Character Edit Dialog -->
+			<wa-dialog label=${this.editingCharacter?.name ? 'Edit Character' : 'Add Character'} ?open=${this.isCharacterDialogOpen} style="--width: 600px;" @wa-after-hide=${(
+        e: Event,
+      ) => {
+        if (e.target === e.currentTarget) this.isCharacterDialogOpen = false;
+      }}>
+				${
+          this.editingCharacter
+            ? html`
+					<div style="display:flex; flex-direction:column; gap: var(--wa-space-m);">
+						<div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--wa-space-m);">
+							<wa-input label="Name" .value=${this.editingCharacter.name} @input=${(
+                e: Event,
+              ) => {
+                if (this.editingCharacter)
+                  this.editingCharacter.name = (e.target as HTMLInputElement).value;
+              }}></wa-input>
+							<wa-select label="Category" .value=${this.editingCharacter.category} @change=${(
+                e: Event,
+              ) => {
+                if (this.editingCharacter)
+                  this.editingCharacter.category = (e.target as any).value;
+              }}>
+								<wa-option value="Main">Main</wa-option>
+								<wa-option value="Supporting">Supporting</wa-option>
+								<wa-option value="Extra">Extra</wa-option>
+								<wa-option value="Background">Background</wa-option>
+							</wa-select>
+						</div>
+
+						<wa-input label="Aliases (comma separated)" .value=${this.editingCharacter.aliases.join(', ')} @input=${(
+                e: Event,
+              ) => {
+                if (this.editingCharacter)
+                  this.editingCharacter.aliases = (e.target as HTMLInputElement).value
+                    .split(',')
+                    .map(s => s.trim())
+                    .filter(s => !!s);
+              }}></wa-input>
+
+						<div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--wa-space-m);">
+							<wa-input label="Gender" .value=${this.editingCharacter.gender} @input=${(
+                e: Event,
+              ) => {
+                if (this.editingCharacter)
+                  this.editingCharacter.gender = (e.target as HTMLInputElement).value;
+              }}></wa-input>
+							<wa-input label="Affiliation" .value=${this.editingCharacter.affiliation} @input=${(
+                e: Event,
+              ) => {
+                if (this.editingCharacter)
+                  this.editingCharacter.affiliation = (e.target as HTMLInputElement).value;
+              }}></wa-input>
+						</div>
+
+						<wa-textarea label="Relationships" .value=${this.editingCharacter.relationships} @input=${(
+                e: Event,
+              ) => {
+                if (this.editingCharacter)
+                  this.editingCharacter.relationships = (e.target as HTMLTextAreaElement).value;
+              }}></wa-textarea>
+
+						${
+              this.editingCharacter.category === 'Main'
+                ? html`
+							<wa-textarea label="Items" .value=${this.editingCharacter.items || ''} @input=${(
+                    e: Event,
+                  ) => {
+                    if (this.editingCharacter)
+                      this.editingCharacter.items = (e.target as HTMLTextAreaElement).value;
+                  }}></wa-textarea>
+							<wa-textarea label="Techniques" .value=${this.editingCharacter.techniques || ''} @input=${(
+                    e: Event,
+                  ) => {
+                    if (this.editingCharacter)
+                      this.editingCharacter.techniques = (e.target as HTMLTextAreaElement).value;
+                  }}></wa-textarea>
+						`
+                : ''
+            }
+					</div>
+				`
+            : ''
+        }
+				<wa-button slot="footer" variant="brand" @click=${() => this.handleSaveCharacter()}>Save Character</wa-button>
 			</wa-dialog>
 		`;
   }

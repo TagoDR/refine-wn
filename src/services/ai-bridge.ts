@@ -150,6 +150,8 @@ export class AiBridge {
     text: string,
     glossaryContext: string,
     memoryContext: string,
+    characterContext: string,
+    knowledgeBaseContext: string,
   ): Promise<ExtractedTerm[]> {
     if (!glossaryArchitectPrompt) {
       this.log('Glossary Architect prompt is missing or empty!', 'error');
@@ -160,6 +162,8 @@ export class AiBridge {
     const prompt = glossaryArchitectPrompt
       .replace('{{glossary}}', glossaryContext)
       .replace('{{memory}}', memoryContext)
+      .replace('{{characters}}', characterContext)
+      .replace('{{knowledge_base}}', knowledgeBaseContext)
       .replace('{{text}}', text);
     const response = await this.callAi(
       prompt,
@@ -194,9 +198,13 @@ export class AiBridge {
     text: string,
     glossaryContext: string,
     memoryContext: string,
+    characterContext: string,
+    knowledgeBaseContext: string,
   ): Promise<string> {
     const systemPrompt = narrativePolisherPrompt
       .replace('{{memory}}', memoryContext)
+      .replace('{{characters}}', characterContext)
+      .replace('{{knowledge_base}}', knowledgeBaseContext)
       .replace('{{glossary}}', glossaryContext);
 
     return this.callAi(text, systemPrompt);
@@ -205,9 +213,16 @@ export class AiBridge {
   /**
    * Update the story memory based on the refined chapter.
    */
-  async updateMemory(chapterText: string, currentMemory: string): Promise<string> {
+  async updateMemory(
+    chapterText: string,
+    currentMemory: string,
+    characterContext: string,
+    knowledgeBaseContext: string,
+  ): Promise<string> {
     const systemPrompt = memoryHistorianPrompt
       .replace('{{memory}}', currentMemory)
+      .replace('{{characters}}', characterContext)
+      .replace('{{knowledge_base}}', knowledgeBaseContext)
       .replace('{{chapter}}', chapterText.substring(0, 2000)); // Only send a snippet if too large
 
     return this.callAi('Update story memory.', systemPrompt, false);

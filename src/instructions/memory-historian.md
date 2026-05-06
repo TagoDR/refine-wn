@@ -10,6 +10,12 @@ Maintain a concise summary of:
 Current Memory:
 {{memory}}
 
+Character Glossary:
+{{characters}}
+
+Project Knowledge Base:
+{{knowledge_base}}
+
 Newly refined chapter:
 {{chapter}}
 

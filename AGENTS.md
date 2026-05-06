@@ -8,9 +8,11 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
 
 1. **Additive File Management**: A multi-book session environment. Users can "Open" multiple EPUBs to append chapters into a single session, pruning junk content via the "Trash" system.
 2. **Terminology Workstation**: A dictionary-style glossary engine supporting "One-to-Many" replacements and Regex patterns. Glossary state is additive and can be exported/imported.
-3. **Story Memory**: A narrative historian that maintains context across chapters, tracking characters, items, and plot developments to ensure consistency in long-running series.
-4. **Split-Reader & Console**: An immersive split-view experience showing Raw Source vs. Refined Prose with a real-time developer-grade Process Console.
-5. **Configurable AI Orchestration**: Support for any OpenAI-compatible local API (LM Studio, Ollama) with adjustable context limits and temperature.
+3. **Structured Metadata**: A dedicated **Character Glossary** for tracking aliases, relationships, and categories, alongside a **Project Knowledge Base** for world-building and style guides.
+4. **Story Memory**: A narrative historian that maintains plot context across chapters to ensure consistency in long-running series.
+5. **Split-Reader & Console**: An immersive split-view experience showing Raw Source vs. Refined Prose with a real-time developer-grade Process Console.
+6. **Unified Portability**: A global import/export system for all project context (Glossary, Characters, Memory, PKB).
+7. **Configurable AI Orchestration**: Support for any OpenAI-compatible local API (LM Studio, Ollama) with adjustable context limits and temperature.
 
 ---
 
@@ -25,9 +27,9 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
 
 ### 2. The Narrative Polisher
 
-**Goal:** Transform MTL artifacts into high-quality prose using Glossary and Memory.
+**Goal:** Transform MTL artifacts into high-quality prose using Glossary, Characters, and Knowledge Base.
 
-- **Workflow:** Receives raw text + Glossary Context + Story Memory. Processes large chapters in **Sequential Chunks** to respect context limits. Each chunk is refined, then passed to the Glossary Architect and Memory Historian before the next chunk starts, ensuring narrative consistency.
+- **Workflow:** Receives raw text + Glossary Context + Character Metadata + Project Knowledge Base + Story Memory. Processes large chapters in **Sequential Chunks** to respect context limits. Each chunk is refined, then passed to the Glossary Architect and Memory Historian before the next chunk starts, ensuring narrative consistency.
 - **Output:** Refined English prose in **VALID HTML (XHTML compatible)** format, preserving structural elements like paragraphs and emphasis tags for direct EPUB integration.
 
 ### 3. The Memory Historian

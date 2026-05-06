@@ -1,0 +1,25 @@
+{
+  "glossary": [
+    {
+      "id": "test-term-1",
+      "term": "Spirit Stones",
+      "searches": ["Lingshi", "Spirit rocks"],
+      "category": "Term"
+    }
+  ],
+  "characters": [
+    {
+      "id": "test-char-1",
+      "name": "Han Li",
+      "aliases": ["Junior Brother Han", "Old Devil Han"],
+      "gender": "Male",
+      "category": "Main",
+      "affiliation": "Yellow Maple Valley",
+      "relationships": "Disciple of Doctor Mo (formerly)",
+      "items": "Mysterious Green Bottle",
+      "techniques": "Spring Evolution Law"
+    }
+  ],
+  "memory": "Han Li has just entered the sect and is looking for a place to cultivate.",
+  "knowledgeBase": "## MTL Rules\n- Translate 'this seat' as 'I'.\n- Maintain a cautious tone for Han Li."
+}

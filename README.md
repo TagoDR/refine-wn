@@ -6,8 +6,11 @@ RefineWN is a specialized local workstation designed for translating and polishi
 
 - **Multi-EPUB Session**: Open and append multiple EPUBs into a single working session.
 - **Advanced Glossary**: Dictionary-style terminology management with support for Regex patterns and "One-to-Many" replacements.
-- **Narrative Memory**: AI-driven "Story Memory" that tracks characters, items, and plot points across chapters to ensure continuity.
-- **Surgical Refinement**: Refine the entire book or individual chapters with glossary-aware and memory-aware AI pipelines.
+- **Character Glossary**: Structured metadata for characters, including aliases, relationships, and categories (Main, Supporting, etc.).
+- **Project Knowledge Base**: A repository for semi-static world-building, style guides, and explicit MTL correction rules.
+- **Narrative Memory**: AI-driven "Story Memory" that tracks plot progress across chapters to ensure continuity.
+- **Unified Portability**: Export and import your entire narrative context (Glossary, Characters, Memory, PKB) in a single JSON file.
+- **Surgical Refinement**: Refine the entire book or individual chapters with context-aware AI pipelines.
 - **Split-View Reader**: Compare raw MTL source with refined prose side-by-side.
 - **Local AI Integration**: Compatible with any OpenAI-compliant API (LM Studio, Ollama, etc.).
 - **Process Console**: Real-time logging of all AI interactions and system processes.
@@ -54,13 +57,17 @@ RefineWN is a specialized local workstation designed for translating and polishi
 
 1. **Import**: Open one or more EPUB files. Source tracking ensures books are managed correctly.
 2. **Cleanup**: Run **Content Cleanup** to prune covers and TOCs from the beginning and end of each EPUB.
-3. **Glossary**: Run **Glossary Extraction** or manually add terms. Apply terminology across all chapters.
+3. **Setup Context**:
+   - **Knowledge Base**: Define your style guide and world-building rules.
+   - **Character Glossary**: Add main characters with their metadata.
+   - **Glossary**: Manually add or extract terminology.
 4. **Refinement**:
    - Run **Refine All**.
    - **Stop** at any time to fix hallucinations.
-   - Edit **Story Memory** to provide the AI with missing plot context.
+   - Edit **Story Memory** or **Character Glossary** to provide the AI with missing plot context.
    - Click **Retry Chapter** to re-process with the corrected facts.
-5. **Export**: Click **Save** to generate the refined EPUB(s) with preserved manifest structure.
+5. **Portability**: Click **Export** in the Glossary column to save your entire project context to a single JSON file for later use.
+6. **Export**: Click **Save** in the Chapter column to generate the refined EPUB(s).
 
 ## Documentation
 

@@ -17,8 +17,16 @@ CORE DIRECTIVES:
 - Consolidate Duplicate titles for the chapter into just one
 
 STORY MEMORY CONTEXT:
-Use this information to ensure consistency in character descriptions, relationship dynamics, and plot-specific terminology.
+Use this information to ensure consistency in relationship dynamics and plot-progress.
 {{memory}}
+
+CHARACTER GLOSSARY:
+Use this information to ensure consistency in character descriptions, aliases, gender pronouns, and specific items/techniques.
+{{characters}}
+
+PROJECT KNOWLEDGE BASE:
+Follow these world-building rules, style guides, and MTL correction instructions.
+{{knowledge_base}}
 
 STRICT GLOSSARY APPLICATION:
 You MUST use these specific terms. Each entry has a "term" (the final word to use) and "searches" (the list of MTL/raw words to be replaced by that term) to standardize how everything is called:

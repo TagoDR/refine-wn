@@ -2,6 +2,8 @@ import type { AiBridge } from './ai-bridge';
 import type { ConfigService } from './config-service';
 import type { GlossaryManager } from './glossary-manager';
 import type { StoryMemoryService } from './story-memory';
+import type { CharacterService } from './character-service';
+import type { KnowledgeBaseService } from './knowledge-base';
 import { TextCleaner } from './text-cleaner';
 import { splitText } from './text-splitter';
 
@@ -11,17 +13,23 @@ export class BatchRefinementService {
   private storyMemoryService: StoryMemoryService;
   private glossaryManager: GlossaryManager;
   private configService: ConfigService;
+  private characterService: CharacterService;
+  private knowledgeBaseService: KnowledgeBaseService;
 
   constructor(
     aiBridge: AiBridge,
     storyMemoryService: StoryMemoryService,
     glossaryManager: GlossaryManager,
     configService: ConfigService,
+    characterService: CharacterService,
+    knowledgeBaseService: KnowledgeBaseService,
   ) {
     this.aiBridge = aiBridge;
     this.storyMemoryService = storyMemoryService;
     this.glossaryManager = glossaryManager;
     this.configService = configService;
+    this.characterService = characterService;
+    this.knowledgeBaseService = knowledgeBaseService;
   }
 
   /**
@@ -48,12 +56,16 @@ export class BatchRefinementService {
 
       const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
       const memoryContext = this.storyMemoryService.getMemory();
+      const characterContext = this.characterService.getAiContext();
+      const pkbContext = this.knowledgeBaseService.getKnowledgeBase();
 
       // 1. Refine Chunk
       let chunkRefined = await this.aiBridge.refineChapter(
         chunks[i],
         glossaryContext,
         memoryContext,
+        characterContext,
+        pkbContext,
       );
 
       // Clean up markdown wrappers if AI included them
@@ -64,6 +76,8 @@ export class BatchRefinementService {
         chunkRefined,
         glossaryContext,
         memoryContext,
+        characterContext,
+        pkbContext,
       );
       if (extracted.length > 0) {
         this.glossaryManager.mergeTerms(extracted);
@@ -74,7 +88,12 @@ export class BatchRefinementService {
       }
 
       // 3. Update Story Memory
-      const updatedMemory = await this.aiBridge.updateMemory(chunkRefined, memoryContext);
+      const updatedMemory = await this.aiBridge.updateMemory(
+        chunkRefined,
+        memoryContext,
+        characterContext,
+        pkbContext,
+      );
       await this.storyMemoryService.save(updatedMemory);
 
       fullRefinedContent += `${chunkRefined}\n\n`;

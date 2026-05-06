@@ -27,6 +27,14 @@ Output ONLY a JSON array of objects with this exact structure:
 
 {{glossary}}
 
+### Character Glossary
+
+{{characters}}
+
+### Project Knowledge Base
+
+{{knowledge_base}}
+
 ### Story Memory
 
 {{memory}}
