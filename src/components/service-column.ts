@@ -67,6 +67,9 @@ export class ServiceColumn extends LitElement {
   @property({ type: Boolean }) hasChapters = false;
   @property({ type: Boolean }) hasSelectedChapter = false;
   @property({ type: Boolean }) isTidying = false;
+  @property({ type: Number }) tidierProgress = 0;
+  @property({ type: Boolean }) isBootstrapping = false;
+  @property({ type: Number }) bootstrapProgress = 0;
 
   render() {
     return html`
@@ -74,14 +77,63 @@ export class ServiceColumn extends LitElement {
 				<div class="header-title">SERVICES</div>
 			</div>
 			<div class="scroll-content">
+
+                <wa-card class="service-card">
+                    <div slot="header">Local AI Settings</div>
+                    <wa-button size="small" @click=${() => this.dispatchEvent(new CustomEvent('configure-ai'))} style="width:100%;">
+                        <wa-icon name="gear" slot="prefix"></wa-icon> Configure AI
+                    </wa-button>
+                    <wa-button size="small" variant="neutral" ghost @click=${() => this.dispatchEvent(new CustomEvent('test-ai'))} style="width:100%; margin-top:4px;">
+                        <wa-icon name="plug-circle-bolt" slot="prefix"></wa-icon> Test Connection
+                    </wa-button>
+                </wa-card>
+                
 				<wa-card class="service-card">
 					<div slot="header">Background Workers</div>
 					<p style="font-size: var(--wa-font-size-xs); margin-bottom: var(--wa-space-s);">Tidy glossaries, merge duplicates, and move people to the Character Glossary.</p>
-					<wa-button size="small" variant="brand" outline style="width:100%;" @click=${() =>
-            this.dispatchEvent(new CustomEvent('run-tidier'))} ?disabled=${this.isTidying}>
-						<wa-icon name="recycle" slot="prefix"></wa-icon> 
-						${this.isTidying ? 'Tidying...' : 'Tidy Glossaries'}
-					</wa-button>
+					<div style="display:flex; flex-direction:column; gap:8px;">
+						<div style="display:flex; align-items:center; gap:8px;">
+							<wa-button size="small" variant=${this.isTidying ? 'danger' : 'brand'} outline style="flex:1;" @click=${() =>
+                this.dispatchEvent(new CustomEvent(this.isTidying ? 'kill-tidier' : 'run-tidier'))}>
+								<wa-icon name=${this.isTidying ? 'x' : 'recycle'} slot="prefix"></wa-icon> 
+								${this.isTidying ? 'Kill Tidier' : 'Tidy Glossaries'}
+							</wa-button>
+							${
+                this.isTidying
+                  ? html`
+								<div style="display:flex; align-items:center; gap:4px; font-size: var(--wa-font-size-2xs);">
+									<wa-progress-ring value=${this.tidierProgress} style="--size: 24px; --track-width: 3px;"></wa-progress-ring>
+									<span>${Math.round(this.tidierProgress)}%</span>
+								</div>
+							`
+                  : ''
+              }
+						</div>
+
+						<div style="display:flex; align-items:center; gap:8px;">
+							<wa-button size="small" variant=${this.isBootstrapping ? 'danger' : 'neutral'} outline style="flex:1;" @click=${() =>
+                this.dispatchEvent(
+                  new CustomEvent(this.isBootstrapping ? 'kill-bootstrap' : 'run-bootstrap'),
+                )}>
+								<wa-icon name=${this.isBootstrapping ? 'x' : 'book'} slot="prefix"></wa-icon> 
+								${this.isBootstrapping ? 'Kill Bootstrap' : 'Bootstrap context'}
+							</wa-button>
+							${
+                this.isBootstrapping
+                  ? html`
+								<div style="display:flex; align-items:center; gap:4px; font-size: var(--wa-font-size-2xs);">
+									<wa-progress-ring value=${this.bootstrapProgress} style="--size: 24px; --track-width: 3px;"></wa-progress-ring>
+									<span>${Math.round(this.bootstrapProgress)}%</span>
+								</div>
+							`
+                  : ''
+              }
+						</div>
+						
+						<div style="font-size: var(--wa-font-size-2xs); color: var(--wa-color-text-quiet); font-style: italic;">
+							* Background tasks can run concurrently with refinement.
+						</div>
+					</div>
 				</wa-card>
 
 				<wa-card class="service-card">
@@ -100,16 +152,6 @@ export class ServiceColumn extends LitElement {
 				</wa-card>
 
 				<slot name="extra"></slot>
-
-				<wa-card class="service-card">
-					<div slot="header">Local AI Settings</div>
-					<wa-button size="small" @click=${() => this.dispatchEvent(new CustomEvent('configure-ai'))} style="width:100%;">
-						<wa-icon name="gear" slot="prefix"></wa-icon> Configure AI
-					</wa-button>
-					<wa-button size="small" variant="neutral" ghost @click=${() => this.dispatchEvent(new CustomEvent('test-ai'))} style="width:100%; margin-top:4px;">
-						<wa-icon name="plug-circle-bolt" slot="prefix"></wa-icon> Test Connection
-					</wa-button>
-				</wa-card>
 
 				<wa-card class="service-card">
 					<div slot="header">Narrative Context</div>

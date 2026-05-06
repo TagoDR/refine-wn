@@ -11,6 +11,7 @@ import { TextCleaner } from './services/text-cleaner';
 import { CharacterService } from './services/character-service';
 import { KnowledgeBaseService } from './services/knowledge-base';
 import { PortabilityService } from './services/portability-service';
+import { VolumeBootstrapService } from './services/volume-bootstrap-service';
 import type { LogEntry, Character } from './types';
 
 // Modular Column Components
@@ -56,7 +57,13 @@ export class AppRoot extends LitElement {
   @state() private totalSteps = 0;
   @state() private statusMessage = '';
   @state() private isTidying = false;
+  @state() private tidierProgress = 0;
+  @state() private isBootstrapping = false;
+  @state() private bootstrapProgress = 0;
   @state() private diffMode = false;
+
+  private tidierAbortController: AbortController | null = null;
+  private bootstrapAbortController: AbortController | null = null;
   @state() private logs: LogEntry[] = [];
 
   @state() private isGlossaryDialogOpen = false;
@@ -93,6 +100,7 @@ export class AppRoot extends LitElement {
     this.characterService,
     this.knowledgeBaseService,
   );
+  private volumeBootstrapService = new VolumeBootstrapService(this.aiBridge, this.epubClient);
 
   private addLog(type: LogEntry['type'], message: string) {
     const timestamp = new Date().toLocaleTimeString();
@@ -498,8 +506,26 @@ export class AppRoot extends LitElement {
     }
   }
 
+  private handleKillTidier() {
+    if (this.tidierAbortController) {
+      this.tidierAbortController.abort();
+      this.addLog('info', 'Glossary tidying cancelled by user.');
+    }
+  }
+
+  private handleKillBootstrap() {
+    if (this.bootstrapAbortController) {
+      this.bootstrapAbortController.abort();
+      this.addLog('info', 'Volume bootstrap cancelled by user.');
+    }
+  }
+
   private async handleTidyGlossaries() {
+    this.isTidying = true;
+    this.tidierProgress = 0;
+    this.tidierAbortController = new AbortController();
     this.addLog('info', 'Starting background glossary tidying...');
+
     try {
       const glossaryContext = JSON.stringify(this.glossaryManager.getAllEntries());
       const characterContext = this.characterService.getAiContext();
@@ -509,8 +535,10 @@ export class AppRoot extends LitElement {
         glossaryContext,
         characterContext,
         pkbContext,
+        this.tidierAbortController.signal,
       );
 
+      this.tidierProgress = 100;
       let changesMade = false;
 
       // 1. Handle moves to Characters
@@ -578,7 +606,59 @@ export class AppRoot extends LitElement {
         this.addLog('info', 'Glossary is already tidy. No changes suggested.');
       }
     } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
       this.addLog('error', `Glossary tidying failed: ${error}`);
+    } finally {
+      this.isTidying = false;
+      this.tidierProgress = 0;
+      this.tidierAbortController = null;
+    }
+  }
+
+  private async handleBootstrapVolume(file: File) {
+    this.isBootstrapping = true;
+    this.bootstrapProgress = 0;
+    this.bootstrapAbortController = new AbortController();
+    this.addLog('info', `Bootstrapping context from previous volume: ${file.name}`);
+
+    try {
+      const result = await this.volumeBootstrapService.bootstrapFromEpub(
+        file,
+        (msg, type) => this.addLog(type, msg),
+        this.bootstrapAbortController.signal,
+        percent => (this.bootstrapProgress = percent),
+      );
+
+      // Merge terms
+      if (result.terms.length > 0) {
+        this.glossaryManager.mergeTerms(result.terms);
+        await this.glossaryManager.save();
+      }
+
+      // Merge characters
+      if (result.characters.length > 0) {
+        this.characterService.mergeCharacters(result.characters);
+        await this.characterService.save();
+      }
+
+      // Update KB and Memory (appending)
+      if (result.knowledgeBase) {
+        const currentKB = this.knowledgeBaseService.getKnowledgeBase();
+        await this.knowledgeBaseService.save(`${currentKB}\n\n--- Bootstrapped Context ---\n${result.knowledgeBase}`);
+      }
+      if (result.storyMemory) {
+        await this.storyMemoryService.save(result.storyMemory);
+      }
+
+      this.syncLocalState();
+      this.addLog('success', 'Volume bootstrap complete! Narrative context initialized.');
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return;
+      this.addLog('error', `Volume bootstrap failed: ${error}`);
+    } finally {
+      this.isBootstrapping = false;
+      this.bootstrapProgress = 0;
+      this.bootstrapAbortController = null;
     }
   }
 
@@ -666,6 +746,9 @@ export class AppRoot extends LitElement {
 					.hasChapters=${this.chapters.length > 0}
 					.hasSelectedChapter=${this.selectedChapterIndex !== -1}
 					.isTidying=${this.isTidying}
+					.tidierProgress=${this.tidierProgress}
+					.isBootstrapping=${this.isBootstrapping}
+					.bootstrapProgress=${this.bootstrapProgress}
 					@configure-ai=${() => (this.isConfigDialogOpen = true)}
 					@test-ai=${this.handleTestConnection}
 					@story-memory=${() => (this.isMemoryDialogOpen = true)}
@@ -679,6 +762,9 @@ export class AppRoot extends LitElement {
           }}
 					@retry-chapter=${this.handleRefineAll}
 					@run-tidier=${this.handleTidyGlossaries}
+					@kill-tidier=${this.handleKillTidier}
+					@run-bootstrap=${() => (this.shadowRoot?.getElementById('bootstrap-upload') as HTMLInputElement | null)?.click()}
+					@kill-bootstrap=${this.handleKillBootstrap}
 					@import-glossary=${() => (this.shadowRoot?.getElementById('glossary-import') as HTMLInputElement | null)?.click()}
 					@export-glossary=${this.handleExportGlossary}
 					@clear-glossary=${async () => {
@@ -707,6 +793,12 @@ export class AppRoot extends LitElement {
       ) => {
         const input = e.target as HTMLInputElement;
         if (input.files?.[0]) this.loadEpubFile(input.files[0]);
+      }}>
+			<input type="file" id="bootstrap-upload" accept=".epub" style="display: none" @change=${(
+        e: Event,
+      ) => {
+        const input = e.target as HTMLInputElement;
+        if (input.files?.[0]) this.handleBootstrapVolume(input.files[0]);
       }}>
 			<input type="file" id="glossary-import" accept=".json" style="display: none" @change=${async (
         e: Event,

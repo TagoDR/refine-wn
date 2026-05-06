@@ -46,6 +46,15 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
   3.  **Standardizes:** Updates entities to match the Project Knowledge Base.
 - **Concurrency:** Designed to use a second AI processing slot, ensuring refinement remains uninterrupted while metadata is polished.
 
+### 4. The Project Historian (Bootstrapper)
+
+**Goal:** Rapidly initialize narrative context from a full-length previous volume.
+
+- **Workflow:** Analyzes a provided EPUB in high-volume chunks (up to 32k context). It:
+  1.  **Bootstraps Lore:** Identifies characters, unique terms, and world rules from the previous volume.
+  2.  **Summarizes State:** Provides a "State of the World" summary for the Story Memory.
+- **Efficiency:** Bypasses individual chapter processing by analyzing the book as a continuous text pool, allowing for a complete context build in minutes rather than hours.
+
 ---
 
 ## Technical Architecture
@@ -53,5 +62,6 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
 - **UI:** Lit + WebAwesome + CSS Grid (5-Column Layout).
 - **Processing:** JSZip + Linkedom (Surgical XML/HTML manipulation).
 - **Storage:** IndexedDB (`idb-keyval`) for terminology, memory, and config persistence.
-- **AI Integration:** Local fetch calls with support for **2+ Concurrent Requests** and **Auto-Reload** for LM Studio.
+- **AI Integration:** Local fetch calls with support for **2+ Concurrent Requests**, **Auto-Reload** for LM Studio, and **High-Volume Context Analysis** (32k+).
 - **Optimization:** Multi-task single-turn AI calls with background metadata management.
+- **Validation:** Real-time **Unified Diff** for prose verification and visual status tracking.

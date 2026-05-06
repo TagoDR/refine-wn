@@ -6,6 +6,7 @@ import memoryHistorianPrompt from '../instructions/memory-historian.md?raw';
 import narrativePolisherPrompt from '../instructions/narrative-polisher.md?raw';
 import consolidatedRefinementPrompt from '../instructions/consolidated-refinement.md?raw';
 import glossaryTidierPrompt from '../instructions/glossary-tidier.md?raw';
+import previousVolumeAnalyzerPrompt from '../instructions/previous-volume-analyzer.md?raw';
 import type { ConfigService } from './config-service';
 
 export interface AiResponse {
@@ -30,6 +31,13 @@ export interface TidyResult {
   mergedTerms: { idsToMerge: string[]; finalEntry: any }[];
   mergedCharacters: { idsToMerge: string[]; finalCharacter: any }[];
   deletedIds: string[];
+}
+
+export interface BootstrapResult {
+  characters: any[];
+  terms: ExtractedTerm[];
+  knowledgeBase: string;
+  storyMemory: string;
 }
 
 export class AiBridge {
@@ -124,7 +132,12 @@ export class AiBridge {
   /**
    * Generic method to call the local AI with retry logic.
    */
-  async callAi(prompt: string, systemPrompt: string, useCache = false): Promise<string> {
+  async callAi(
+    prompt: string,
+    systemPrompt: string,
+    useCache = false,
+    signal?: AbortSignal,
+  ): Promise<string> {
     const config = this.configService.getConfig();
 
     const utf8SafeBase64 = (str: string) =>
@@ -148,6 +161,7 @@ export class AiBridge {
     let lastError: unknown;
 
     while (retries > 0) {
+      if (signal?.aborted) throw new Error('Aborted');
       this.log(`Calling AI (Attempt ${4 - retries}/3)...`, 'info');
       try {
         const response = await fetch(config.ai.endpoint, {
@@ -161,6 +175,7 @@ export class AiBridge {
             ],
             temperature: config.ai.temperature,
           }),
+          signal,
         });
 
         if (!response.ok) {
@@ -198,6 +213,9 @@ export class AiBridge {
         this.log('AI Response received successfully.', 'success');
         return result;
       } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') {
+           throw err;
+        }
         lastError = err;
         if (err instanceof Error && err.message === 'Server Busy') {
           this.log('Server busy, retrying in 2s...', 'info');
@@ -231,6 +249,7 @@ export class AiBridge {
     memoryContext: string,
     characterContext: string,
     knowledgeBaseContext: string,
+    signal?: AbortSignal,
   ): Promise<ExtractedTerm[]> {
     if (!glossaryArchitectPrompt) {
       this.log('Glossary Architect prompt is missing or empty!', 'error');
@@ -248,6 +267,7 @@ export class AiBridge {
       prompt,
       'You are a helpful assistant that only outputs valid JSON.',
       false,
+      signal,
     );
 
     try {
@@ -279,6 +299,7 @@ export class AiBridge {
     memoryContext: string,
     characterContext: string,
     knowledgeBaseContext: string,
+    signal?: AbortSignal,
   ): Promise<string> {
     const systemPrompt = narrativePolisherPrompt
       .replace('{{memory}}', memoryContext)
@@ -286,7 +307,7 @@ export class AiBridge {
       .replace('{{knowledge_base}}', knowledgeBaseContext)
       .replace('{{glossary}}', glossaryContext);
 
-    return this.callAi(text, systemPrompt);
+    return this.callAi(text, systemPrompt, false, signal);
   }
 
   /**
@@ -297,6 +318,7 @@ export class AiBridge {
     currentMemory: string,
     characterContext: string,
     knowledgeBaseContext: string,
+    signal?: AbortSignal,
   ): Promise<string> {
     const systemPrompt = memoryHistorianPrompt
       .replace('{{memory}}', currentMemory)
@@ -304,7 +326,7 @@ export class AiBridge {
       .replace('{{knowledge_base}}', knowledgeBaseContext)
       .replace('{{chapter}}', chapterText.substring(0, 2000)); // Only send a snippet if too large
 
-    return this.callAi('Update story memory.', systemPrompt, false);
+    return this.callAi('Update story memory.', systemPrompt, false, signal);
   }
 
   /**
@@ -316,6 +338,7 @@ export class AiBridge {
     memoryContext: string,
     characterContext: string,
     knowledgeBaseContext: string,
+    signal?: AbortSignal,
   ): Promise<ConsolidatedResult> {
     const systemPrompt = consolidatedRefinementPrompt
       .replace('{{memory}}', memoryContext)
@@ -323,7 +346,7 @@ export class AiBridge {
       .replace('{{knowledge_base}}', knowledgeBaseContext)
       .replace('{{glossary}}', glossaryContext);
 
-    const response = await this.callAi(text, systemPrompt, false);
+    const response = await this.callAi(text, systemPrompt, false, signal);
 
     const refinedText = this.extractBlock(response, 'refined_prose');
     const updatedMemory = this.extractBlock(response, 'updated_memory') || memoryContext;
@@ -355,6 +378,7 @@ export class AiBridge {
     glossaryContext: string,
     characterContext: string,
     knowledgeBaseContext: string,
+    signal?: AbortSignal,
   ): Promise<TidyResult> {
     this.log('Starting background glossary tidying...', 'info');
     const prompt = glossaryTidierPrompt
@@ -366,6 +390,7 @@ export class AiBridge {
       prompt,
       'You are a helpful assistant that only outputs valid JSON.',
       false,
+      signal,
     );
 
     try {
@@ -381,6 +406,37 @@ export class AiBridge {
         mergedTerms: [],
         mergedCharacters: [],
         deletedIds: [],
+      };
+    }
+  }
+
+  /**
+   * Analyzes a large chunk of text from a previous volume to bootstrap context.
+   */
+  async analyzePreviousVolume(text: string, signal?: AbortSignal): Promise<BootstrapResult> {
+    this.log(`Analyzing text chunk (${Math.round(text.length / 1024)}kb)...`, 'info');
+    const prompt = previousVolumeAnalyzerPrompt;
+
+    const response = await this.callAi(
+      text,
+      prompt,
+      false,
+      signal,
+    );
+
+    try {
+      const jsonMatch = response.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]) as BootstrapResult;
+      }
+      throw new Error('No JSON object found in volume analysis response.');
+    } catch (e) {
+      this.log(`Failed to parse Volume Analysis output: ${e}`, 'error');
+      return {
+        characters: [],
+        terms: [],
+        knowledgeBase: '',
+        storyMemory: '',
       };
     }
   }
