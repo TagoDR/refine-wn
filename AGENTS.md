@@ -16,42 +16,34 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
 
 ---
 
-## Agent Roles (Configurable via UI)
+## Agent Roles
 
-### 1. The Glossary Architect
+### 1. The Story Architect (Consolidated)
 
-**Goal:** Identify entities and normalize terminology across the entire book.
+**Goal:** Refine prose, normalize terminology, and maintain narrative continuity in a single efficient pass.
 
-- **Workflow:** Analyzes chapters to build a "One-to-Many" dictionary mapping.
-- **Output:** JSON glossary objects: `{"term": "Refined Name", "searches": ["MTL 1", "MTL 2"]}`.
+- **Workflow:** The primary worker for refinement. In a single turn, it:
+  1.  **Refines Prose:** Transforms MTL artifacts into professional English prose (XHTML format).
+  2.  **Extracts Terms:** Identifies new entities and suggests standardized names for the glossary.
+  3.  **Updates Memory:** Summarizes plot progress, character changes, and items/skills.
+- **Context:** Operates on text chunks (splitting large chapters) while referencing the full Glossary, Character Metadata, Project Knowledge Base, and the evolving Story Memory.
+- **Output:** A structured response containing the refined text, a list of new glossary terms, and the updated story memory.
 
-### 2. The Narrative Polisher
-
-**Goal:** Transform MTL artifacts into high-quality prose using Glossary, Characters, and Knowledge Base.
-
-- **Workflow:** Receives raw text + Glossary Context + Character Metadata + Project Knowledge Base + Story Memory. Processes large chapters in **Sequential Chunks** to respect context limits. Each chunk is refined, then passed to the Glossary Architect and Memory Historian before the next chunk starts, ensuring narrative consistency.
-- **Output:** Refined English prose in **VALID HTML (XHTML compatible)** format, preserving structural elements like paragraphs and emphasis tags for direct EPUB integration.
-
-### 3. The Memory Historian
-
-**Goal:** Maintain narrative continuity.
-
-- **Workflow:** Scans newly refined chapter chunks to update the Story Memory. Updates are visible **Live** in the UI and are immediately available to the next chunk or chapter in the sequence.
-- **Output:** Updated summary of characters, skills, items, and plot progress.
-
-### 4. The Content Filter
+### 2. The Content Filter
 
 **Goal:** Automate the "Trash" system via Bidirectional Pruning.
 
-- **Workflow:** Performs **Bidirectional Scans** (Forward from start, Backward from end) on each imported EPUB. Decisions are based on chapter titles and content snippets.
-- **Output:** Identification of junk chapters (Covers, TOCs, ads) to be pruned until valid story prose is reached.
+- **Workflow:** Performs **Bidirectional Scans** (Forward from start, Backward from end) on each imported EPUB.
+- **Decision Engine:** Analyzes titles and content snippets to identify junk chapters (Covers, TOCs, ads).
+- **Output:** Boolean removal decisions with rationale, enabling automatic pruning until valid story content is reached.
 
 ---
 
-## Technical Stack
+## Technical Architecture
 
 - **UI:** Lit + WebAwesome + CSS Grid.
 - **Processing:** JSZip + Linkedom (Surgical XML/HTML manipulation).
 - **Storage:** IndexedDB (`idb-keyval`) for terminology, memory, and config persistence.
-- **AI Integration:** Local fetch calls to OpenAI-compatible endpoints.
-- **Utilities:** Sentence-aware text splitting for context management.
+- **AI Integration:** Local fetch calls to OpenAI-compatible endpoints with **Auto-Reload** support for LM Studio.
+- **Optimization:** Multi-task single-turn AI calls to minimize latency and context-switching overhead.
+- **Validation:** Real-time **Unified Diff** for prose verification and visual status tracking in the chapter list.

@@ -10,8 +10,10 @@ RefineWN is a specialized local workstation designed for translating and polishi
 - **Project Knowledge Base**: A repository for semi-static world-building, style guides, and explicit MTL correction rules.
 - **Narrative Memory**: AI-driven "Story Memory" that tracks plot progress across chapters to ensure continuity.
 - **Unified Portability**: Export and import your entire narrative context (Glossary, Characters, Memory, PKB) in a single JSON file.
-- **Surgical Refinement**: Refine the entire book or individual chapters with context-aware AI pipelines.
-- **Split-View Reader**: Compare raw MTL source with refined prose side-by-side.
+- **Optimized Refinement**: High-efficiency consolidated AI pass that refines prose, extracts terminology, and updates story memory in a single turn.
+- **Unified Diff View**: Clear, color-coded comparison of prose changes (Additions vs. Deletions) with HTML tags hidden for readability.
+- **Visual Progress Tracking**: Real-time status indicators (Spinner/Checkmark) in the chapter list to monitor refinement progress.
+- **AI Auto-Reload**: Support for LM Studio's Model Management API to automatically reload models if they are unloaded during long sessions.
 - **Local AI Integration**: Compatible with any OpenAI-compliant API (LM Studio, Ollama, etc.).
 - **Process Console**: Real-time logging of all AI interactions and system processes.
 
