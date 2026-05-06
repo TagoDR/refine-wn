@@ -98,6 +98,7 @@ export class AppRoot extends LitElement {
   }
 
   async firstUpdated() {
+    this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
     this.currentConfig = await this.configService.load();
     await this.glossaryManager.load();
     this.storyMemory = await this.storyMemoryService.load();
@@ -264,11 +265,21 @@ export class AppRoot extends LitElement {
     }
   }
 
+  private async handleTestConnection() {
+    this.isProcessing = true;
+    this.statusMessage = 'Testing Connection...';
+    try {
+      await this.aiBridge.testConnection();
+    } finally {
+      this.isProcessing = false;
+      this.statusMessage = '';
+    }
+  }
+
   private async handleCleanup() {
     if (this.chapters.length === 0) return;
     this.isProcessing = true;
     this.isPaused = false;
-    this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
 
     try {
       this.currentStep = 0;
@@ -339,7 +350,6 @@ export class AppRoot extends LitElement {
     if (this.chapters.length === 0) return;
     this.isProcessing = true;
     this.isPaused = false;
-    this.aiBridge.onLog = (msg, type) => this.addLog(type || 'info', msg);
 
     try {
       const total = this.chapters.length;
@@ -565,6 +575,7 @@ export class AppRoot extends LitElement {
 					.hasChapters=${this.chapters.length > 0}
 					.hasSelectedChapter=${this.selectedChapterIndex !== -1}
 					@configure-ai=${() => (this.isConfigDialogOpen = true)}
+					@test-ai=${this.handleTestConnection}
 					@story-memory=${() => (this.isMemoryDialogOpen = true)}
 					@run-cleanup=${this.handleCleanup}
 					@run-single-refinement=${this.handleSingleRefinement}
@@ -738,7 +749,7 @@ export class AppRoot extends LitElement {
                       }
                     }}
 									>
-										<wa-icon src="/src/icons/x.svg"></wa-icon>
+										<wa-icon src="/icons/x.svg"></wa-icon>
 									</wa-button>
 								</div>
 							`,
@@ -749,7 +760,7 @@ export class AppRoot extends LitElement {
                   this.requestUpdate();
                 }
               }}>
-								<wa-icon src="/src/icons/square-plus.svg"></wa-icon> Add Pattern
+								<wa-icon src="/icons/square-plus.svg"></wa-icon> Add Pattern
 							</wa-button>
 						</div>
 

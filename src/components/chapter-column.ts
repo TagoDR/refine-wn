@@ -91,13 +91,13 @@ export class ChapterColumn extends LitElement {
 				</div>
 				<div class="header-actions">
 					<wa-button size="small" variant="brand" @click=${() => this.dispatchEvent(new CustomEvent('open-epub'))}>
-						<wa-icon src="/src/icons/file-upload.svg"></wa-icon> Open
+						<wa-icon src="/icons/file-upload.svg"></wa-icon> Open
 					</wa-button>
 					<wa-button size="small" @click=${() => this.dispatchEvent(new CustomEvent('close-project'))} ?disabled=${this.chapters.length === 0}>
-						<wa-icon src="/src/icons/x.svg"></wa-icon> Close
+						<wa-icon src="/icons/x.svg"></wa-icon> Close
 					</wa-button>
 					<wa-button size="small" variant="success" @click=${() => this.dispatchEvent(new CustomEvent('save-epub'))} ?disabled=${this.chapters.length === 0}>
-						<wa-icon src="/src/icons/device-floppy.svg"></wa-icon> Save
+						<wa-icon src="/icons/device-floppy.svg"></wa-icon> Save
 					</wa-button>
 				</div>
 			</div>
@@ -115,7 +115,7 @@ export class ChapterColumn extends LitElement {
                 e.stopPropagation();
                 this.dispatchEvent(new CustomEvent<number>('trash-chapter', { detail: i }));
               }}>
-								<wa-icon src="/src/icons/trash.svg"></wa-icon>
+								<wa-icon src="/icons/trash.svg"></wa-icon>
 							</wa-button>
 						</div>
 					</div>

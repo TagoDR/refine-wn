@@ -136,21 +136,21 @@ export class GlossaryColumn extends LitElement {
 					<div class="header-actions">
 						<wa-button size="extra-small" variant="neutral" ghost @click=${() =>
               this.dispatchEvent(new CustomEvent('import-glossary'))}>
-							<wa-icon src="/src/icons/file-import.svg"></wa-icon>
+							<wa-icon src="/icons/file-import.svg"></wa-icon>
 						</wa-button>
 						<wa-button size="extra-small" variant="neutral" ghost @click=${() =>
               this.dispatchEvent(new CustomEvent('export-glossary'))}>
-							<wa-icon src="/src/icons/file-export.svg"></wa-icon>
+							<wa-icon src="/icons/file-export.svg"></wa-icon>
 						</wa-button>
 						<wa-button size="extra-small" variant="danger" ghost @click=${() =>
               this.dispatchEvent(new CustomEvent('clear-glossary'))}>
-							<wa-icon src="/src/icons/trash.svg"></wa-icon>
+							<wa-icon src="/icons/trash.svg"></wa-icon>
 						</wa-button>
 					</div>
 				</div>
 				<wa-button size="small" variant="brand" appearance="accent" style="width:100%;" @click=${() =>
           this.dispatchEvent(new CustomEvent('add-entry'))}>
-					<wa-icon src="/src/icons/square-plus.svg" slot="prefix"></wa-icon> Add Term
+					<wa-icon src="/icons/square-plus.svg" slot="prefix"></wa-icon> Add Term
 				</wa-button>
 			</div>
 			
@@ -169,13 +169,13 @@ export class GlossaryColumn extends LitElement {
                     new CustomEvent<GlossaryEntry>('edit-entry', { detail: entry }),
                   );
                 }}>
-									<wa-icon src="/src/icons/edit.svg"></wa-icon>
+									<wa-icon src="/icons/edit.svg"></wa-icon>
 								</wa-button>
 								<wa-button size="extra-small" variant="danger" ghost @click=${(e: Event) => {
                   e.stopPropagation();
                   this.dispatchEvent(new CustomEvent<string>('delete-entry', { detail: entry.id }));
                 }}>
-									<wa-icon src="/src/icons/trash.svg"></wa-icon>
+									<wa-icon src="/icons/trash.svg"></wa-icon>
 								</wa-button>
 							</div>
 						</div>
@@ -189,7 +189,7 @@ export class GlossaryColumn extends LitElement {
 				<div style="padding: 0 var(--wa-space-xs); margin-bottom: var(--wa-space-xs);">
 					<wa-button size="small" variant="brand" appearance="accent" style="width:100%;" @click=${() =>
             this.dispatchEvent(new CustomEvent('add-character'))}>
-						<wa-icon src="/src/icons/square-plus.svg" slot="prefix"></wa-icon> Add Character
+						<wa-icon src="/icons/square-plus.svg" slot="prefix"></wa-icon> Add Character
 					</wa-button>
 				</div>
 				${this.characters.map(
@@ -203,7 +203,7 @@ export class GlossaryColumn extends LitElement {
                   e.stopPropagation();
                   this.dispatchEvent(new CustomEvent<Character>('edit-character', { detail: char }));
                 }}>
-									<wa-icon src="/src/icons/edit.svg"></wa-icon>
+									<wa-icon src="/icons/edit.svg"></wa-icon>
 								</wa-button>
 								<wa-button size="extra-small" variant="danger" ghost @click=${(e: Event) => {
                   e.stopPropagation();
@@ -211,7 +211,7 @@ export class GlossaryColumn extends LitElement {
                     new CustomEvent<string>('delete-character', { detail: char.id }),
                   );
                 }}>
-									<wa-icon src="/src/icons/trash.svg"></wa-icon>
+									<wa-icon src="/icons/trash.svg"></wa-icon>
 								</wa-button>
 							</div>
 						</div>
