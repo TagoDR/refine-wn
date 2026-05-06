@@ -70,6 +70,50 @@ export class AiBridge {
   }
 
   /**
+   * Ensures the requested model is loaded in memory using LM Studio's /load API.
+   */
+  async ensureModelLoaded(): Promise<boolean> {
+    const config = this.configService.getConfig();
+    // LM Studio usually runs API on 1234, but the completion URL is /v1/chat/completions
+    // We need to extract the base URL (e.g., http://localhost:1234)
+    const baseUrl = config.ai.endpoint.split('/v1')[0];
+    const loadUrl = `${baseUrl}/api/v1/models/load`;
+
+    this.log(`Ensuring model is loaded: ${config.ai.model}...`, 'info');
+
+    try {
+      const response = await fetch(loadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: config.ai.model,
+          context_length: config.ai.maxContext,
+          flash_attention: true,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        this.log(`Model ${data.status}: ${data.instance_id} in ${data.load_time_seconds}s`, 'success');
+        return true;
+      }
+
+      // If load endpoint doesn't exist (older version), just log and hope for the best
+      if (response.status === 404) {
+        this.log('Load API not found. Please ensure LM Studio version >= 0.4.0', 'error');
+        return false;
+      }
+
+      const errData = await response.json().catch(() => ({}));
+      this.log(`Load failed: ${errData.error?.message || response.statusText}`, 'error');
+      return false;
+    } catch (err) {
+      this.log(`Error calling Load API: ${err}`, 'error');
+      return false;
+    }
+  }
+
+  /**
    * Generic method to call the local AI with retry logic.
    */
   async callAi(prompt: string, systemPrompt: string, useCache = false): Promise<string> {
@@ -113,9 +157,20 @@ export class AiBridge {
 
         if (!response.ok) {
           const errorData = (await response.json().catch(() => ({}))) as {
-            error?: { message?: string };
+            error?: { message?: string; code?: string | number };
           };
           const errorMsg = errorData.error?.message || `HTTP ${response.status}`;
+          
+          // Detect if model is not loaded (common in LM Studio)
+          if (response.status === 400 || errorMsg.toLowerCase().includes('not loaded') || errorMsg.toLowerCase().includes('no model')) {
+            this.log('Model not loaded. Attempting automatic reload...', 'info');
+            const loaded = await this.ensureModelLoaded();
+            if (loaded) {
+              retries--;
+              continue; // Retry original request after loading
+            }
+          }
+
           this.log(`AI Error: ${errorMsg}`, 'error');
 
           if (response.status === 503) {
@@ -142,7 +197,16 @@ export class AiBridge {
           await new Promise(r => setTimeout(r, 2000)); // Wait before retry
           continue;
         }
+        
+        // Final attempt to reload on network/unknown error if it looks like a server issue
+        if (retries === 1) {
+           this.log('Final retry: Refreshing model connection...', 'info');
+           await this.ensureModelLoaded();
+        }
+
         this.log(`AI Call failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
+        retries--;
+        if (retries > 0) continue;
         break;
       }
     }

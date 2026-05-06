@@ -1,6 +1,7 @@
 import { css, html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import * as Diff from 'diff';
 import type { Chapter } from '../services/epub-service';
 import type { LogEntry } from '../types';
 
@@ -61,6 +62,18 @@ export class ReaderColumn extends LitElement {
 		.log-error { color: #f44747; }
 		.log-info { color: #4fc1ff; }
 		.log-success { color: #b5cea8; }
+
+		.diff-added {
+			background-color: rgba(40, 167, 69, 0.2);
+			color: #28a745;
+			text-decoration: none;
+		}
+
+		.diff-removed {
+			background-color: rgba(220, 53, 69, 0.2);
+			color: #dc3545;
+			text-decoration: line-through;
+		}
 	`;
 
   @property({ type: Object }) chapter: Chapter | null = null;
@@ -76,9 +89,49 @@ export class ReaderColumn extends LitElement {
     }
   }
 
+  private stripHtml(html: string): string {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    // Replace <p> and <br> with newlines to preserve structure in diff
+    const walk = document.createTreeWalker(div, NodeFilter.SHOW_ELEMENT);
+    let node: Node | null;
+    while ((node = walk.nextNode())) {
+      const el = node as HTMLElement;
+      if (el.tagName === 'P' || el.tagName === 'BR' || el.tagName === 'DIV' || el.tagName === 'H1' || el.tagName === 'H2') {
+        const newline = document.createTextNode('\n');
+        el.parentNode?.insertBefore(newline, el.nextSibling);
+      }
+    }
+    return div.textContent || '';
+  }
+
+  private renderDiff() {
+    if (!this.chapter) return html``;
+
+    const oldText = this.stripHtml(this.chapter.originalContent || '');
+    const newText = this.stripHtml(this.chapter.content || '');
+
+    // We diff words for better readability in prose
+    const changes = Diff.diffWords(oldText, newText);
+
+    return html`
+			<div class="chapter-content" style="white-space: pre-wrap; font-family: var(--wa-font-family-body);">
+				${changes.map(part => {
+          if (part.added) {
+            return html`<span class="diff-added">${part.value}</span>`;
+          }
+          if (part.removed) {
+            return html`<span class="diff-removed">${part.value}</span>`;
+          }
+          return html`<span>${part.value}</span>`;
+        })}
+			</div>
+		`;
+  }
+
   render() {
     return html`
-			<div class="reader-area" style="${this.diffMode ? 'overflow:hidden; display:flex; flex-direction:column;' : ''}">
+			<div class="reader-area">
 				${
           this.chapter
             ? html`
@@ -99,16 +152,16 @@ export class ReaderColumn extends LitElement {
 					${
             this.diffMode
               ? html`
-						<wa-split-panel position="50" style="flex:1; min-height:0;">
-							<div slot="start" style="padding: var(--wa-space-m); height:100%; overflow:auto;">
-								<div style="font-weight:bold; color:var(--wa-color-text-quiet); margin-bottom:1rem;">RAW MTL</div>
-								<div class="chapter-content" style="color: var(--wa-color-text-quiet); font-size: 0.9rem;">${unsafeHTML(this.chapter.originalContent || '')}</div>
+						<div style="padding: var(--wa-space-m);">
+							<div style="font-weight:bold; color:var(--wa-color-brand-60); margin-bottom:1rem; display:flex; gap: var(--wa-space-m);">
+								<span>UNIFIED DIFF</span>
+								<div style="display:flex; gap: var(--wa-space-xs); font-size: 0.8rem; font-weight: normal;">
+									<span class="diff-added" style="padding: 2px 4px; border-radius: 4px;">Added</span>
+									<span class="diff-removed" style="padding: 2px 4px; border-radius: 4px;">Removed</span>
+								</div>
 							</div>
-							<div slot="end" style="padding: var(--wa-space-m); height:100%; overflow:auto;">
-								<div style="font-weight:bold; color:var(--wa-color-brand-60); margin-bottom:1rem;">REFINED</div>
-								<div class="chapter-content">${unsafeHTML(this.chapter.content)}</div>
-							</div>
-						</wa-split-panel>
+							${this.renderDiff()}
+						</div>
 					`
               : html`
 						<div class="chapter-content">${unsafeHTML(this.chapter.content)}</div>
