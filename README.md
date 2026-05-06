@@ -5,12 +5,16 @@ RefineWN is a specialized local workstation designed for translating and polishi
 ## Features
 
 - **Multi-EPUB Session**: Open and append multiple EPUBs into a single working session.
-- **Advanced Glossary**: Dictionary-style terminology management with support for Regex patterns and "One-to-Many" replacements.
+- **5-Column Workstation**: A specialized layout for maximum efficiency:
+  - **Chapters**: Manage file structure and track processing status.
+  - **Glossary**: Dedicated management for places, items, and techniques.
+  - **Characters**: A structured metadata repository for people, aliases, and relationships.
+  - **Reader**: Immersive view with Unified Diff highlighting.
+  - **Services**: Control center for AI configuration, portability, and process execution.
+- **Advanced Glossary**: Dictionary-style terminology management with support for Regex patterns.
 - **Character Glossary**: Structured metadata for characters, including aliases, relationships, and categories (Main, Supporting, etc.).
-- **Project Knowledge Base**: A repository for semi-static world-building, style guides, and explicit MTL correction rules.
 - **Narrative Memory**: AI-driven "Story Memory" that tracks plot progress across chapters to ensure continuity.
-- **Unified Portability**: Export and import your entire narrative context (Glossary, Characters, Memory, PKB) in a single JSON file.
-- **Optimized Refinement**: High-efficiency consolidated AI pass that refines prose, extracts terminology, and updates story memory in a single turn.
+- **Optimized Refinement**: High-efficiency consolidated AI pass that refines prose, identifies characters, and updates story memory in a single turn.
 - **Unified Diff View**: Clear, color-coded comparison of prose changes (Additions vs. Deletions) with HTML tags hidden for readability.
 - **Visual Progress Tracking**: Real-time status indicators (Spinner/Checkmark) in the chapter list to monitor refinement progress.
 - **AI Auto-Reload**: Support for LM Studio's Model Management API to automatically reload models if they are unloaded during long sessions.
