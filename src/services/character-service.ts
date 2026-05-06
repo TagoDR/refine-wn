@@ -63,6 +63,41 @@ export class CharacterService {
   }
 
   /**
+   * Merges extracted names into the character glossary.
+   */
+  mergeCharacters(names: { term: string; searches: string[] }[]): void {
+    for (const item of names) {
+      // Find existing character by name (case-insensitive)
+      let existing = this.characters.find(c => c.name.toLowerCase() === item.term.toLowerCase());
+
+      if (!existing) {
+        // Also check if any alias matches the new term
+        existing = this.characters.find(c =>
+          c.aliases.some(a => a.toLowerCase() === item.term.toLowerCase()),
+        );
+      }
+
+      if (existing) {
+        // Merge new searches into aliases, avoiding duplicates
+        const newAliases = new Set([...existing.aliases, ...item.searches]);
+        // Also ensure the original searched-for term isn't lost if it was different
+        existing.aliases = Array.from(newAliases).filter(a => a.toLowerCase() !== existing!.name.toLowerCase());
+      } else {
+        // Create new character
+        this.characters.push({
+          id: crypto.randomUUID(),
+          name: item.term,
+          aliases: item.searches.filter(s => s.toLowerCase() !== item.term.toLowerCase()),
+          gender: '',
+          category: 'Supporting',
+          affiliation: '',
+          relationships: '',
+        });
+      }
+    }
+  }
+
+  /**
    * Generates a string summary of characters for AI context.
    */
   getAiContext(): string {

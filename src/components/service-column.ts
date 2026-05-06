@@ -74,6 +74,23 @@ export class ServiceColumn extends LitElement {
 			</div>
 			<div class="scroll-content">
 				<wa-card class="service-card">
+					<div slot="header">Portability</div>
+					<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px;">
+						<wa-button size="small" @click=${() => this.dispatchEvent(new CustomEvent('import-glossary'))}>
+							<wa-icon src="/icons/file-import.svg" slot="prefix"></wa-icon> Import
+						</wa-button>
+						<wa-button size="small" @click=${() => this.dispatchEvent(new CustomEvent('export-glossary'))}>
+							<wa-icon src="/icons/file-export.svg" slot="prefix"></wa-icon> Export
+						</wa-button>
+					</div>
+					<wa-button size="small" variant="danger" ghost style="width:100%;" @click=${() => this.dispatchEvent(new CustomEvent('clear-glossary'))}>
+						<wa-icon src="/icons/trash.svg" slot="prefix"></wa-icon> Clear Settings
+					</wa-button>
+				</wa-card>
+
+				<slot name="extra"></slot>
+
+				<wa-card class="service-card">
 					<div slot="header">Local AI Settings</div>
 					<wa-button size="small" @click=${() => this.dispatchEvent(new CustomEvent('configure-ai'))} style="width:100%;">
 						<wa-icon name="gear" slot="prefix"></wa-icon> Configure AI

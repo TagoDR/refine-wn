@@ -16,6 +16,7 @@ import type { LogEntry, Character } from './types';
 // Modular Column Components
 import './components/chapter-column';
 import './components/glossary-column';
+import './components/character-column';
 import './components/reader-column';
 import './components/service-column';
 
@@ -33,7 +34,7 @@ export class AppRoot extends LitElement {
 
 		.app-grid {
 			display: grid;
-			grid-template-columns: 280px 320px 1fr 280px;
+			grid-template-columns: 280px 320px 320px 1fr 280px;
 			height: 100vh;
 			overflow: hidden;
 		}
@@ -511,7 +512,6 @@ export class AppRoot extends LitElement {
 
 				<glossary-column
 					.entries=${this.glossaryEntries}
-					.characters=${this.characters}
 					@add-entry=${() => {
             this.editingEntry = {
               id: crypto.randomUUID(),
@@ -530,18 +530,10 @@ export class AppRoot extends LitElement {
             await this.glossaryManager.save();
             this.syncLocalState();
           }}
-					@clear-glossary=${async () => {
-            if (confirm('Are you sure you want to clear all settings? Use Export first if unsure.')) {
-              await this.glossaryManager.clear();
-              await this.characterService.clear();
-              await this.storyMemoryService.clear();
-              await this.knowledgeBaseService.clear();
-              this.syncLocalState();
-              this.addLog('info', 'All settings cleared.');
-            }
-          }}
-					@import-glossary=${() => (this.shadowRoot?.getElementById('glossary-import') as HTMLInputElement | null)?.click()}
-					@export-glossary=${this.handleExportGlossary}
+				></glossary-column>
+
+				<character-column
+					.characters=${this.characters}
 					@add-character=${() => {
             this.editingCharacter = {
               id: crypto.randomUUID(),
@@ -559,7 +551,7 @@ export class AppRoot extends LitElement {
             this.isCharacterDialogOpen = true;
           }}
 					@delete-character=${(e: CustomEvent<string>) => this.handleDeleteCharacter(e.detail)}
-				></glossary-column>
+				></character-column>
 
 				<reader-column
 					.chapter=${this.chapters[this.selectedChapterIndex]}
@@ -600,6 +592,18 @@ export class AppRoot extends LitElement {
             this.handleRefineAll();
           }}
 					@retry-chapter=${this.handleRefineAll}
+					@import-glossary=${() => (this.shadowRoot?.getElementById('glossary-import') as HTMLInputElement | null)?.click()}
+					@export-glossary=${this.handleExportGlossary}
+					@clear-glossary=${async () => {
+            if (confirm('Are you sure you want to clear all settings? Use Export first if unsure.')) {
+              await this.glossaryManager.clear();
+              await this.characterService.clear();
+              await this.storyMemoryService.clear();
+              await this.knowledgeBaseService.clear();
+              this.syncLocalState();
+              this.addLog('info', 'All settings cleared.');
+            }
+          }}
 				>
 					<wa-card class="service-card" slot="extra">
 						<div slot="header">Project Knowledge Base</div>

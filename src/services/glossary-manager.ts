@@ -152,6 +152,8 @@ export class GlossaryManager {
    */
   mergeTerms(terms: { term: string; searches: string[]; category: string }[]): void {
     for (const item of terms) {
+      if (item.category === 'Name') continue; // Skip names, handled by CharacterService
+
       const existing = Array.from(this.entries.values()).find(
         e => e.term.toLowerCase() === item.term.toLowerCase(),
       );

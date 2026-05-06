@@ -75,11 +75,23 @@ export class BatchRefinementService {
 
       // 2. Merge Extracted Terms
       if (result.extractedTerms.length > 0) {
-        this.glossaryManager.mergeTerms(result.extractedTerms);
-        await this.glossaryManager.save();
+        // Split names from other terms
+        const names = result.extractedTerms.filter(t => t.category === 'Name');
+        const terms = result.extractedTerms.filter(t => t.category !== 'Name');
+
+        if (names.length > 0) {
+          this.characterService.mergeCharacters(names);
+          await this.characterService.save();
+        }
+
+        if (terms.length > 0) {
+          this.glossaryManager.mergeTerms(terms);
+          await this.glossaryManager.save();
+        }
+
         if (onLog) {
           onLog(
-            `Glossary updated with ${result.extractedTerms.length} terms from chunk ${i + 1}.`,
+            `Context updated: ${names.length} characters, ${terms.length} terms found in chunk ${i + 1}.`,
             'success',
           );
         }
@@ -91,10 +103,7 @@ export class BatchRefinementService {
       fullRefinedContent += `${chunkRefined}\n\n`;
     }
 
-    // 4. Final Glossary Application Pass
-    const finalContent = this.glossaryManager.applyGlossary(fullRefinedContent.trim());
-
-    return finalContent;
+    return fullRefinedContent.trim();
   }
 
   private stripMarkdown(text: string): string {
