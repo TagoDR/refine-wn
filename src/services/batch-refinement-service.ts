@@ -59,8 +59,8 @@ export class BatchRefinementService {
       const characterContext = this.characterService.getAiContext();
       const pkbContext = this.knowledgeBaseService.getKnowledgeBase();
 
-      // 1. Refine Chunk
-      let chunkRefined = await this.aiBridge.refineChapter(
+      // 1. Process Consolidated (Refine, Extract, Memory)
+      const result = await this.aiBridge.processConsolidated(
         chunks[i],
         glossaryContext,
         memoryContext,
@@ -68,33 +68,25 @@ export class BatchRefinementService {
         pkbContext,
       );
 
+      let chunkRefined = result.refinedText;
+
       // Clean up markdown wrappers if AI included them
       chunkRefined = this.stripMarkdown(chunkRefined);
 
-      // 2. Extract Terms from refined chunk
-      const extracted = await this.aiBridge.extractNames(
-        chunkRefined,
-        glossaryContext,
-        memoryContext,
-        characterContext,
-        pkbContext,
-      );
-      if (extracted.length > 0) {
-        this.glossaryManager.mergeTerms(extracted);
+      // 2. Merge Extracted Terms
+      if (result.extractedTerms.length > 0) {
+        this.glossaryManager.mergeTerms(result.extractedTerms);
         await this.glossaryManager.save();
         if (onLog) {
-          onLog(`Glossary updated with ${extracted.length} terms from chunk ${i + 1}.`, 'success');
+          onLog(
+            `Glossary updated with ${result.extractedTerms.length} terms from chunk ${i + 1}.`,
+            'success',
+          );
         }
       }
 
       // 3. Update Story Memory
-      const updatedMemory = await this.aiBridge.updateMemory(
-        chunkRefined,
-        memoryContext,
-        characterContext,
-        pkbContext,
-      );
-      await this.storyMemoryService.save(updatedMemory);
+      await this.storyMemoryService.save(result.updatedMemory);
 
       fullRefinedContent += `${chunkRefined}\n\n`;
     }

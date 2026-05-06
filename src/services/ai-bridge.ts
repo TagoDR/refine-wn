@@ -4,6 +4,7 @@ import contentFilterPrompt from '../instructions/content-filter.md?raw';
 import glossaryArchitectPrompt from '../instructions/glossary-architect.md?raw';
 import memoryHistorianPrompt from '../instructions/memory-historian.md?raw';
 import narrativePolisherPrompt from '../instructions/narrative-polisher.md?raw';
+import consolidatedRefinementPrompt from '../instructions/consolidated-refinement.md?raw';
 import type { ConfigService } from './config-service';
 
 export interface AiResponse {
@@ -15,6 +16,12 @@ export interface ExtractedTerm {
   term: string;
   searches: string[];
   category: 'Name' | 'Place' | 'Term' | 'Other';
+}
+
+export interface ConsolidatedResult {
+  refinedText: string;
+  extractedTerms: ExtractedTerm[];
+  updatedMemory: string;
 }
 
 export class AiBridge {
@@ -226,6 +233,53 @@ export class AiBridge {
       .replace('{{chapter}}', chapterText.substring(0, 2000)); // Only send a snippet if too large
 
     return this.callAi('Update story memory.', systemPrompt, false);
+  }
+
+  /**
+   * Consolidates refinement, glossary extraction, and memory update into one turn.
+   */
+  async processConsolidated(
+    text: string,
+    glossaryContext: string,
+    memoryContext: string,
+    characterContext: string,
+    knowledgeBaseContext: string,
+  ): Promise<ConsolidatedResult> {
+    const systemPrompt = consolidatedRefinementPrompt
+      .replace('{{memory}}', memoryContext)
+      .replace('{{characters}}', characterContext)
+      .replace('{{knowledge_base}}', knowledgeBaseContext)
+      .replace('{{glossary}}', glossaryContext);
+
+    const response = await this.callAi(text, systemPrompt, false);
+
+    const refinedText = this.extractBlock(response, 'refined_prose');
+    const updatedMemory = this.extractBlock(response, 'updated_memory') || memoryContext;
+    const extractedTermsRaw = this.extractBlock(response, 'extracted_terms');
+
+    let extractedTerms: ExtractedTerm[] = [];
+    if (extractedTermsRaw) {
+      try {
+        const jsonMatch = extractedTermsRaw.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          extractedTerms = JSON.parse(jsonMatch[0]);
+        }
+      } catch (e) {
+        this.log('Failed to parse consolidated glossary terms.', 'error');
+      }
+    }
+
+    return {
+      refinedText: refinedText || text,
+      extractedTerms,
+      updatedMemory,
+    };
+  }
+
+  private extractBlock(text: string, tag: string): string | null {
+    const regex = new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i');
+    const match = text.match(regex);
+    return match ? match[1].trim() : null;
   }
 
   /**
