@@ -78,21 +78,30 @@ export class VolumeBootstrapService {
   private mergeCharacters(existing: any[], newChars: any[]): any[] {
     const map = new Map<string, any>();
     // Pre-populate with existing
-    for (const c of existing) map.set(c.name.toLowerCase(), c);
+    for (const c of existing) map.set((c.name || c.term || '').toLowerCase(), c);
 
     for (const c of newChars) {
-      const key = c.name.toLowerCase();
+      const name = c.name || c.term;
+      if (!name) continue;
+      const key = name.toLowerCase();
+      
+      const newAliases = c.aliases || c.searches || [];
+
       if (map.has(key)) {
         const char = map.get(key);
         // Merge aliases
-        char.aliases = Array.from(new Set([...char.aliases, ...c.aliases]));
+        char.aliases = Array.from(new Set([...(char.aliases || []), ...newAliases]));
         // Append other fields if they add info
-        if (c.affiliation && !char.affiliation.includes(c.affiliation))
-          char.affiliation += `; ${c.affiliation}`;
-        if (c.relationships && !char.relationships.includes(c.relationships))
-          char.relationships += `; ${c.relationships}`;
+        if (c.affiliation && !char.affiliation?.includes(c.affiliation))
+          char.affiliation = (char.affiliation ? `${char.affiliation}; ` : '') + c.affiliation;
+        if (c.relationships && !char.relationships?.includes(c.relationships))
+          char.relationships = (char.relationships ? `${char.relationships}; ` : '') + c.relationships;
       } else {
-        map.set(key, c);
+        map.set(key, {
+           ...c,
+           name,
+           aliases: newAliases
+        });
       }
     }
     return Array.from(map.values());
@@ -100,15 +109,21 @@ export class VolumeBootstrapService {
 
   private mergeTerms(existing: any[], newTerms: any[]): any[] {
     const map = new Map<string, any>();
-    for (const t of existing) map.set(t.term.toLowerCase(), t);
+    for (const t of existing) map.set((t.term || '').toLowerCase(), t);
 
     for (const t of newTerms) {
+      if (!t.term) continue;
       const key = t.term.toLowerCase();
+      const newSearches = t.searches || [];
+
       if (map.has(key)) {
         const term = map.get(key);
-        term.searches = Array.from(new Set([...term.searches, ...t.searches]));
+        term.searches = Array.from(new Set([...(term.searches || []), ...newSearches]));
       } else {
-        map.set(key, t);
+        map.set(key, {
+           ...t,
+           searches: newSearches
+        });
       }
     }
     return Array.from(map.values());
