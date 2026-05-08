@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "bootstrap": "tsx scripts/bootstrap.ts",
+    "refine": "tsx scripts/orchestrator.ts",
     "prettier": "prettier --write \"**/*.{md,html,svg}\" \"!dist/**\" \"!node_modules/**\" \"!*.user.js\"",
     "biome": "biome check --fix ."
   },
