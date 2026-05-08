@@ -78,6 +78,12 @@ async function main() {
 
   console.log(chalk.white(`Found ${epubs.length} books to refine.\n`));
 
+  let isCancelled = false;
+  process.on('SIGINT', () => {
+    console.log(chalk.yellow('\n\n🛑 Cancellation requested. Finishing current chapter...'));
+    isCancelled = true;
+  });
+
   const multiBar = new cliProgress.MultiBar({
     clearOnComplete: false,
     hideCursor: true,
@@ -87,7 +93,20 @@ async function main() {
   let tidyCounter = 0;
 
   for (const epubPath of epubs) {
+    if (isCancelled) break;
+
     const filename = path.basename(epubPath);
+    const exportPath = path.join(outputDir, `Refined_${filename}`);
+
+    // Skip if file already exists in output folder
+    try {
+      await fs.access(exportPath);
+      console.log(chalk.dim(`⏭️ Skipping already processed file: ${filename}`));
+      continue;
+    } catch {
+      // File doesn't exist, proceed
+    }
+
     console.log(chalk.bold(`\n📖 Processing: ${filename}`));
 
     const buffer = await fs.readFile(epubPath);
@@ -119,6 +138,8 @@ async function main() {
 
     // 7. Refinement Loop
     for (const item of validSpine) {
+      if (isCancelled) break;
+
       const chapterId = `${filename}-${item.id}`;
       
       if (projectState.processedChapters.includes(chapterId)) {
@@ -178,7 +199,6 @@ async function main() {
     }
 
     // 9. Export Refined EPUB
-    const exportPath = path.join(outputDir, `Refined_${filename}`);
     const outBuffer = await zip.generateAsync({ type: 'nodebuffer' });
     await fs.writeFile(exportPath, outBuffer);
     console.log(chalk.green(`\n✅ Saved: ${exportPath}`));
