@@ -40,7 +40,7 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
 
 **Goal:** Maintain the integrity and organization of project metadata concurrently.
 
-- **Workflow:** Runs in the background (concurrently with refinement). It:
+- **Workflow:** Runs in the background (concurrently with refinement) or as part of the **CLI Bootstrap** process. It:
   1.  **Deduplicates:** Identifies and merges redundant terms or characters.
   2.  **Reorganizes:** Moves misplaced people from the Term Glossary to the Character Glossary.
   3.  **Standardizes:** Updates entities to match the Project Knowledge Base.
@@ -50,7 +50,7 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
 
 **Goal:** Rapidly initialize narrative context from a full-length previous volume.
 
-- **Workflow:** Analyzes a provided EPUB in high-volume chunks (up to 32k context). It:
+- **Workflow:** Analyzes a provided EPUB in high-volume chunks (up to 32k context). Available via the **Workstation UI** or the **Standalone CLI Script**. It:
   1.  **Bootstraps Lore:** Identifies characters, unique terms, and world rules from the previous volume.
   2.  **Summarizes State:** Provides a "State of the World" summary for the Story Memory.
 - **Efficiency:** Bypasses individual chapter processing by analyzing the book as a continuous text pool, allowing for a complete context build in minutes rather than hours.
@@ -60,6 +60,7 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
 ## Technical Architecture
 
 - **UI:** Lit + WebAwesome + CSS Grid (5-Column Layout).
+- **CLI:** Node.js script using `tsx` for high-performance batch context analysis.
 - **Processing:** JSZip + Linkedom (Surgical XML/HTML manipulation).
 - **Storage:** IndexedDB (`idb-keyval`) for terminology, memory, and config persistence.
 - **AI Integration:** Local fetch calls with support for **2+ Concurrent Requests**, **Auto-Reload** for LM Studio, and **High-Volume Context Analysis** (32k+).

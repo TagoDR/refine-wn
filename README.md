@@ -15,10 +15,10 @@ RefineWN is a specialized local workstation designed for translating and polishi
 - **Character Glossary**: Structured metadata for characters, including aliases, relationships, and categories (Main, Supporting, etc.).
 - **Narrative Memory**: AI-driven "Story Memory" that tracks plot progress across chapters to ensure continuity.
 - **Optimized Refinement**: High-efficiency consolidated AI pass that refines prose, identifies characters, and updates story memory in a single turn.
-- **Previous Volume Bootstrap**: Rapidly initialize your narrative context by importing an EPUB of a previous volume. The AI analyzes large chunks of text (up to 32k context) to build a foundation of characters, lore, and plot.
+- **Previous Volume Bootstrap**: Rapidly initialize your narrative context by importing an EPUB of a previous volume. Available in the UI and as a high-performance CLI script.
 - **Unified Diff View**: Clear, color-coded comparison of prose changes (Additions vs. Deletions) with HTML tags hidden for readability.
 - **Visual Progress Tracking**: Real-time status indicators (Spinner/Checkmark) in the chapter list to monitor refinement progress.
-- **Background Glossary Tidier**: A concurrent background worker that reviews, merges, and tidies terminology and characters without interrupting refinement.
+- **Background Glossary Tidier**: A concurrent background worker that reviews, merges, and tidies terminology and characters without interrupting refinement. Features real-time circular progress and instant cancellation.
 - **AI Auto-Reload**: Support for LM Studio's Model Management API to automatically reload models if they are unloaded during long sessions.
 - **Local AI Integration**: Compatible with any OpenAI-compliant API (LM Studio, Ollama, etc.).
 - **Process Console**: Real-time logging of all AI interactions and system processes.
@@ -76,6 +76,22 @@ RefineWN is a specialized local workstation designed for translating and polishi
    - Click **Retry Chapter** to re-process with the corrected facts.
 5. **Portability**: Click **Export** in the Glossary column to save your entire project context to a single JSON file for later use.
 6. **Export**: Click **Save** in the Chapter column to generate the refined EPUB(s).
+
+## CLI Tools
+
+### Bootstrap Context
+
+The workstation includes a standalone Node.js script for batch-processing multiple previous volumes from your terminal. It leverages the same high-volume context analysis (up to 32k tokens) and automatically tidies the resulting glossary.
+
+**Usage:**
+
+1.  Place your previous volume EPUBs in `./public/data/` (or `./dist/data/`).
+2.  Run the bootstrap script:
+    ```bash
+    npm run bootstrap
+    ```
+3.  The script will generate (or update) a `bootstrapped_settings.json` file in the same folder.
+4.  Import this JSON file into the workstation using the **Import** button in the **Services** column.
 
 ## Documentation
 
