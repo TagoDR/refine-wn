@@ -1,52 +1,45 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import JSZip from 'jszip';
 import { DOMParser } from 'linkedom';
 import chalk from 'chalk';
 import * as cliProgress from 'cli-progress';
 import { glob } from 'glob';
 
+import { loadConfig, ensureDir, resolveDataPath, getWriteableDataPath } from './utils.js';
+
 /**
  * CLI Bootstrap Script for RefineWN
  * Processes all EPUBs in a folder to build narrative context.
  */
 
-const __dropdown = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(__dropdown, '..');
-
-// --- Configuration ---
-const CONFIG_PATH = path.join(ROOT_DIR, 'src/config.json');
-const INSTRUCTIONS_DIR = path.join(ROOT_DIR, 'src/instructions');
-
 async function main() {
   console.log(chalk.bold.cyan('\n🚀 RefineWN CLI Bootstrap Tool\n'));
 
-  // 1. Resolve Data Directory
-  let dataDir = path.join(ROOT_DIR, 'dist/data');
-  try {
-    await fs.stat(dataDir);
-    const files = await fs.readdir(dataDir);
-    if (files.length === 0) throw new Error('Empty');
-  } catch {
-    dataDir = path.join(ROOT_DIR, 'public/data');
-    await fs.mkdir(dataDir, { recursive: true });
-  }
-
-  console.log(chalk.gray(`Target directory: ${dataDir}`));
-
-  // 2. Load AI Config
-  const config = JSON.parse(await fs.readFile(CONFIG_PATH, 'utf-8'));
+  // 1. Load Config
+  const config = await loadConfig();
   const aiEndpoint = config.ai.endpoint;
   const aiModel = config.ai.model;
-  // const maxContext = config.ai.maxContext || 32768;
+  
+  // 2. Resolve Paths
+  // inputDir is relative to data root (dist/data or public/data)
+  const inputDir = await resolveDataPath(config.bootstrap.inputDir);
+  const instructionsDir = await ensureDir(config.bootstrap.instructionsDir);
+  
+  // settingsPath is relative to data root, and we want to ensure it's writeable
+  const settingsPath = await getWriteableDataPath(config.bootstrap.settingsFile);
+
+  // Ensure inputDir exists (even if empty) so glob doesn't fail silently if user hasn't created it
+  await fs.mkdir(inputDir, { recursive: true });
+
+  console.log(chalk.gray(`Input directory:  ${inputDir}`));
+  console.log(chalk.gray(`Output settings: ${settingsPath}`));
 
   // 3. Load Instructions
-  const historianPrompt = await fs.readFile(path.join(INSTRUCTIONS_DIR, 'previous-volume-analyzer.md'), 'utf-8');
-  const tidierPrompt = await fs.readFile(path.join(INSTRUCTIONS_DIR, 'glossary-tidier.md'), 'utf-8');
+  const historianPrompt = await fs.readFile(path.join(instructionsDir, 'previous-volume-analyzer.md'), 'utf-8');
+  const tidierPrompt = await fs.readFile(path.join(instructionsDir, 'glossary-tidier.md'), 'utf-8');
 
   // 4. Load/Init Settings
-  const settingsPath = path.join(dataDir, 'bootstrapped_settings.json');
   let projectState = {
     glossary: [],
     characters: [],
@@ -63,9 +56,9 @@ async function main() {
   }
 
   // 5. Scan EPUBs
-  const epubs = (await glob('*.epub', {cwd: dataDir, absolute: true})).sort((a, b) => a.localeCompare(b));
+  const epubs = (await glob('*.epub', {cwd: inputDir, absolute: true})).sort((a, b) => a.localeCompare(b));
   if (epubs.length === 0) {
-    console.log(chalk.red('\nNo EPUB files found in data folder. Exiting.'));
+    console.log(chalk.red(`\nNo EPUB files found in ${inputDir}. Exiting.`));
     return;
   }
 

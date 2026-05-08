@@ -4,5 +4,16 @@
     "model": "qwen/qwen3.5-9b",
     "maxContext": 131072,
     "temperature": 0.7
+  },
+  "bootstrap": {
+    "inputDir": "bootstrap",
+    "settingsFile": "bootstrap/settings.json",
+    "instructionsDir": "src/instructions"
+  },
+  "refine": {
+    "inputDir": "input",
+    "outputDir": "output",
+    "settingsFile": "settings.json",
+    "instructionsDir": "src/instructions"
   }
 }

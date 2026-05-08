@@ -85,7 +85,7 @@ The workstation includes a standalone Node.js script for batch-processing multip
 
 **Usage:**
 
-1.  Place your previous volume EPUBs in `./public/data/` (or `./dist/data/`).
+1.  Place your previous volume EPUBs in `./public/data/bootstrap/` (configurable in `src/config.json`).
 2.  Run the bootstrap script:
     ```bash
     npm run bootstrap

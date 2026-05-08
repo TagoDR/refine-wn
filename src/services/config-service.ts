@@ -8,6 +8,11 @@ export interface AppConfig {
     maxContext: number;
     temperature: number;
   };
+  bootstrap: {
+    inputDir: string;
+    settingsFile: string;
+    instructionsDir: string;
+  };
 }
 
 export class ConfigService {
