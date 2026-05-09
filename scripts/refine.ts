@@ -9,11 +9,11 @@ import * as diff from 'diff';
 import { loadConfig, resolveDataPath, getWriteableDataPath, ensureDir } from './utils.js';
 
 /**
- * CLI Orchestrator for Batch EPUB Refinement
+ * CLI Refine Tool for Batch EPUB Refinement
  * Automates the RefineWN workflow: Cleanup -> Refine -> Tidy -> Export.
  */
 
-interface OrchestratorState {
+interface RefineState {
   glossary: any[];
   characters: any[];
   memory: string;
@@ -23,7 +23,7 @@ interface OrchestratorState {
 }
 
 async function main() {
-  console.log(chalk.bold.magenta('\n✨ RefineWN Batch Orchestrator\n'));
+  console.log(chalk.bold.magenta('\n✨ RefineWN Batch Refiner\n'));
 
   // 1. Load Config
   const config = await loadConfig();
@@ -49,7 +49,7 @@ async function main() {
   console.log(chalk.gray(`Settings: ${settingsPath}`));
 
   // 3. Load/Init State
-  let projectState: OrchestratorState = {
+  let projectState: RefineState = {
     glossary: [],
     characters: [],
     memory: '',

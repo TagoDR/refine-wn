@@ -4,7 +4,10 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Both 'scripts/' and 'dist/' are one level below the project root.
 export const ROOT_DIR = path.resolve(__dirname, '..');
+
 export const CONFIG_PATH = path.join(ROOT_DIR, 'src/config.json');
 
 /**

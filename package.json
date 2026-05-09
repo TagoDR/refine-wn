@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "tsc && vite build && vite build --mode cli",
     "preview": "vite preview",
     "bootstrap": "tsx scripts/bootstrap.ts",
-    "refine": "tsx scripts/orchestrator.ts",
+    "refine": "tsx scripts/refine.ts",
     "prettier": "prettier --write \"**/*.{md,html,svg}\" \"!dist/**\" \"!node_modules/**\" \"!*.user.js\"",
     "biome": "biome check --fix ."
   },
