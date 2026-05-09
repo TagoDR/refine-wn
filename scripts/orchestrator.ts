@@ -149,7 +149,7 @@ async function main() {
 
       const chapterPath = path.posix.join(opfDir, item.href);
       const content = await zip.file(chapterPath)!.async('string');
-      
+
       const response = await callAi(
         JSON.stringify({
           knowledgeBase: projectState.knowledgeBase,
@@ -209,23 +209,42 @@ async function main() {
 }
 
 async function runCleanup(zip: JSZip, spine: any[], opfDir: string, prompt: string, ai: any) {
-  // Simple logic: Scan first 5 and last 5 items
-  const startCheck = spine.slice(0, 5);
-  const endCheck = spine.slice(-5);
   const toSkip = new Set<string>();
 
-  for (const item of [...startCheck, ...endCheck]) {
-    const content = await zip.file(path.posix.join(opfDir, item.href))!.async('string');
-    const doc = new DOMParser().parseFromString(content, 'text/html');
-    const text = doc.body.textContent || '';
-    
-    const response = await callAi(text.substring(0, 2000), prompt, ai);
-    if (response.toLowerCase().includes('junk')) {
+  // 1. Scan from the start
+  for (let i = 0; i < Math.min(spine.length, 10); i++) {
+    const item = spine[i];
+    const isJunk = await checkIsJunk(zip, item, opfDir, prompt, ai);
+    if (isJunk) {
       toSkip.add(item.id);
+    } else {
+      break; // Found first story chapter, stop scanning forward
+    }
+  }
+
+  // 2. Scan from the end
+  for (let i = spine.length - 1; i >= Math.max(0, spine.length - 5); i--) {
+    const item = spine[i];
+    if (toSkip.has(item.id)) continue;
+    const isJunk = await checkIsJunk(zip, item, opfDir, prompt, ai);
+    if (isJunk) {
+      toSkip.add(item.id);
+    } else {
+      break; // Found last story chapter, stop scanning backward
     }
   }
 
   return spine.filter(s => !toSkip.has(s.id));
+}
+
+async function checkIsJunk(zip: JSZip, item: any, opfDir: string, prompt: string, ai: any) {
+  const content = await zip.file(path.posix.join(opfDir, item.href))!.async('string');
+  const doc = new DOMParser().parseFromString(content, 'text/html');
+  const text = doc.body.textContent || '';
+  
+  // Use a very small sample and no context for speed
+  const response = await callAi(text.substring(0, 1500), prompt, ai);
+  return response.toLowerCase().includes('junk');
 }
 
 async function callAi(prompt: string, system: string, ai: any) {
