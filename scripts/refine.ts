@@ -137,13 +137,36 @@ async function main() {
     const spine = Array.from(opfDoc.getElementsByTagName('itemref')).map(ref => {
       const idref = ref.getAttribute('idref') || '';
       return { id: idref, href: manifestItems[idref] };
-    }).filter(s => s.href.endsWith('.xhtml') || s.href.endsWith('.html'));
+    }).filter(s => s.href && (s.href.endsWith('.xhtml') || s.href.endsWith('.html')));
 
     const opfDir = path.dirname(opfPath);
 
     // 6. Cleanup Pass (AI Filter)
     console.log(chalk.dim(`  🧹 Cleaning up junk from ${filename}...`));
     const validSpine = await runCleanup(zip, spine, opfDir, filterPrompt, aiConfig, filename, projectState);
+    
+    // Physical Removal from EPUB and State Persistence
+    const junkIds = new Set(spine.filter(s => !validSpine.includes(s)).map(s => s.id));
+    if (junkIds.size > 0) {
+      for (const item of spine) {
+        if (junkIds.has(item.id)) {
+          // 1. Remove file from ZIP
+          zip.remove(path.posix.join(opfDir, item.href));
+          // 2. Remove from OPF DOM
+          const manifestItem = opfDoc.querySelector(`item[id="${item.id}"]`);
+          const spineItem = opfDoc.querySelector(`itemref[idref="${item.id}"]`);
+          manifestItem?.remove();
+          spineItem?.remove();
+        }
+      }
+      // 3. Serialize and save updated OPF
+      const updatedOpf = opfDoc.toString();
+      await zip.file(opfPath, updatedOpf);
+      // 4. Persist skippedChapters in settings.json
+      await fs.writeFile(settingsPath, JSON.stringify(projectState, null, 2));
+      console.log(chalk.dim(`  Removed ${junkIds.size} junk chapters from EPUB manifest.`));
+    }
+
     console.log(chalk.dim(`  Refining: ${validSpine.length} / ${spine.length} items.`));
 
     // Update progress bar with corrected total
@@ -241,12 +264,8 @@ async function main() {
           tidierPrompt,
           aiConfig
         );
-        const tidyData = parseXmlResponse(tidyResponse); // Tidier might still output JSON in tags or just JSON
-        if (tidyData) {
-            // If tidier returns JSON, parseXmlResponse might need to handle it or we use JSON.parse
-            // Let's stick to JSON for tidier for now as it's simpler
-            applyTidyResult(projectState, tidyData);
-        }
+        const tidyData = parseXmlResponse(tidyResponse);
+        if (tidyData) applyTidyResult(projectState, tidyData);
       }
     }
 
@@ -260,7 +279,7 @@ async function main() {
   console.log(chalk.bold.green('\n🏁 Batch Refinement Complete!'));
 }
 
-async function runCleanup(zip: JSZip, spine: any[], opfDir: string, prompt: string, ai: any, filename: string, state: any) {
+async function runCleanup(zip: JSZip, spine: any[], opfDir: string, prompt: string, ai: any, filename: string, state: RefineState) {
   const toSkip = new Set<string>();
 
   // Use previously skipped chapters if available
@@ -433,10 +452,12 @@ function generateDiffHtml(oldHtml: string, newHtml: string) {
 
 function createWorkingHtml(diffHtml: string, original: string, refined: string) {
   return `<!DOCTYPE html>
-<html>
+<html lang="en" class="wa-theme-default wa-dark">
 <head>
   <meta charset="UTF-8">
   <title>Refinement Progress</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.6.0/dist-cdn/styles/webawesome.css" integrity="sha256-QwsdSf2i6zC+zFqhcT6Tsos+gY20WuA+i2vUW8vCfvc=" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.6.0/dist/webawesome.loader.min.js"></script>
   <style>
     body { font-family: sans-serif; line-height: 1.6; max-width: 900px; margin: 40px auto; padding: 20px; background: #f6f8fa; color: #24292f; }
     .container { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
