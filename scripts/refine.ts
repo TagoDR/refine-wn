@@ -92,10 +92,9 @@ async function main() {
 
   console.log(chalk.white(`Found ${epubs.length} books to refine.\n`));
 
-  let isCancelled = false;
   process.on('SIGINT', () => {
-    console.log(chalk.yellow('\n\n🛑 Cancellation requested. Finishing current chapter...'));
-    isCancelled = true;
+    console.log(chalk.yellow('\n\n🛑 Process aborted.'));
+    process.exit(0);
   });
 
   const multiBar = new cliProgress.MultiBar({
@@ -107,8 +106,6 @@ async function main() {
   let tidyCounter = 0;
 
   for (const epubPath of epubs) {
-    if (isCancelled) break;
-
     const filename = path.basename(epubPath);
     const exportPath = path.join(outputDir, `Refined_${filename}`);
 
@@ -154,16 +151,26 @@ async function main() {
 
     // 7. Refinement Loop
     for (const item of validSpine) {
-      if (isCancelled) break;
-
       const chapterId = `${filename}-${item.id}`;
-      
+      const chapterPath = path.posix.join(opfDir, item.href);
+
       if (projectState.processedChapters.includes(chapterId)) {
+        // Load refined content from working file to ensure the final EPUB is correct
+        try {
+          const workingPath = await resolveDataPath(path.join(workingDirBase, filename, `${item.id}.html`));
+          const html = await fs.readFile(workingPath, 'utf-8');
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          const refined = doc.getElementById('raw-refined')?.textContent || '';
+          if (refined) {
+            await zip.file(chapterPath, refined);
+          }
+        } catch (e) {
+          // If working file is missing, it stays as original in this zip instance
+        }
         progressBar.increment();
         continue;
       }
 
-      const chapterPath = path.posix.join(opfDir, item.href);
       const originalContent = await zip.file(chapterPath)!.async('string');
       
       // Prune context to only include what's relevant to this chapter
@@ -193,23 +200,27 @@ async function main() {
         aiConfig
       );
 
-      const result = parseJsonResponse(response);
+      const result = parseXmlResponse(response);
       if (result) {
         // Update content in ZIP
-        if (result.refinedContent) {
-          await zip.file(chapterPath, result.refinedContent);
+        if (result.refinedProse) {
+          await zip.file(chapterPath, result.refinedProse);
           
           // Save working file with diff
           const workingPath = await getWriteableDataPath(path.join(workingDirBase, filename, `${item.id}.html`));
-          const diffHtml = generateDiffHtml(originalContent, result.refinedContent);
-          const finalHtml = createWorkingHtml(diffHtml, originalContent, result.refinedContent);
+          const diffHtml = generateDiffHtml(originalContent, result.refinedProse);
+          const finalHtml = createWorkingHtml(diffHtml, originalContent, result.refinedProse);
           await fs.writeFile(workingPath, finalHtml);
         }
         
         // Update State
-        if (result.storyMemory) projectState.memory = result.storyMemory;
-        if (result.newCharacters) mergeCharacters(projectState.characters, result.newCharacters);
-        if (result.newTerms) mergeTerms(projectState.glossary, result.newTerms);
+        if (result.updatedMemory) projectState.memory = result.updatedMemory.trim();
+        if (result.extractedTerms) {
+          const terms = result.extractedTerms.filter((t: any) => t.category !== 'Name');
+          const chars = result.extractedTerms.filter((t: any) => t.category === 'Name');
+          mergeTerms(projectState.glossary, terms);
+          mergeCharacters(projectState.characters, chars);
+        }
         
         projectState.processedChapters.push(chapterId);
         await fs.writeFile(settingsPath, JSON.stringify(projectState, null, 2));
@@ -230,8 +241,12 @@ async function main() {
           tidierPrompt,
           aiConfig
         );
-        const tidyData = parseJsonResponse(tidyResponse);
-        if (tidyData) applyTidyResult(projectState, tidyData);
+        const tidyData = parseXmlResponse(tidyResponse); // Tidier might still output JSON in tags or just JSON
+        if (tidyData) {
+            // If tidier returns JSON, parseXmlResponse might need to handle it or we use JSON.parse
+            // Let's stick to JSON for tidier for now as it's simpler
+            applyTidyResult(projectState, tidyData);
+        }
       }
     }
 
@@ -323,14 +338,36 @@ async function callAi(prompt: string, system: string, ai: any) {
   }
 }
 
-function parseJsonResponse(text: string) {
-  try {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-  } catch {
-    return null;
+function parseXmlResponse(text: string) {
+  const result: any = {};
+  
+  const proseMatch = text.match(/<refined_prose>([\s\S]*?)<\/refined_prose>/);
+  if (proseMatch) result.refinedProse = proseMatch[1].trim();
+
+  const memoryMatch = text.match(/<updated_memory>([\s\S]*?)<\/updated_memory>/);
+  if (memoryMatch) result.updatedMemory = memoryMatch[1].trim();
+
+  const termsMatch = text.match(/<extracted_terms>([\s\S]*?)<\/extracted_terms>/);
+  if (termsMatch) {
+    try {
+      const jsonStr = termsMatch[1].match(/\[[\s\S]*\]/)?.[0] || '[]';
+      result.extractedTerms = JSON.parse(jsonStr);
+    } catch {
+      result.extractedTerms = [];
+    }
   }
-  return null;
+
+  // Fallback: If no tags found, try parsing as raw JSON (for the Tidier or simple responses)
+  if (!result.refinedProse && !result.updatedMemory && !result.extractedTerms) {
+    try {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+
+  return (result.refinedProse || result.updatedMemory || result.extractedTerms) ? result : null;
 }
 
 function mergeCharacters(existing: any[], news: any[]) {
