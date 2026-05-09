@@ -13,6 +13,7 @@
   "refine": {
     "inputDir": "input",
     "outputDir": "output",
+    "workingDir": "working",
     "settingsFile": "settings.json",
     "instructionsDir": "src/instructions"
   }

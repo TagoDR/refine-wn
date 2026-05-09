@@ -13,6 +13,13 @@ export interface AppConfig {
     settingsFile: string;
     instructionsDir: string;
   };
+  refine: {
+    inputDir: string;
+    outputDir: string;
+    workingDir: string;
+    settingsFile: string;
+    instructionsDir: string;
+  };
 }
 
 export class ConfigService {

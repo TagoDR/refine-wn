@@ -5,12 +5,22 @@ import { DOMParser } from 'linkedom';
 import chalk from 'chalk';
 import * as cliProgress from 'cli-progress';
 import { glob } from 'glob';
+import * as diff from 'diff';
 import { loadConfig, resolveDataPath, getWriteableDataPath, ensureDir } from './utils.js';
 
 /**
  * CLI Orchestrator for Batch EPUB Refinement
  * Automates the RefineWN workflow: Cleanup -> Refine -> Tidy -> Export.
  */
+
+interface OrchestratorState {
+  glossary: any[];
+  characters: any[];
+  memory: string;
+  knowledgeBase: string;
+  processedChapters: string[];
+  skippedChapters: string[];
+}
 
 async function main() {
   console.log(chalk.bold.magenta('\n✨ RefineWN Batch Orchestrator\n'));
@@ -24,31 +34,35 @@ async function main() {
   // 2. Resolve Paths
   const inputDir = await resolveDataPath(refineConfig.inputDir);
   const outputDir = await getWriteableDataPath(refineConfig.outputDir);
+  const workingDirBase = refineConfig.workingDir;
   const settingsPath = await getWriteableDataPath(refineConfig.settingsFile);
   const bootstrapPath = await resolveDataPath(bootstrapConfig.settingsFile);
   const instructionsDir = await ensureDir(refineConfig.instructionsDir);
 
   await fs.mkdir(inputDir, { recursive: true });
   await fs.mkdir(outputDir, { recursive: true });
+  // Ensure base working dir exists
+  await resolveDataPath(workingDirBase).then(p => fs.mkdir(p, { recursive: true })).catch(() => {});
 
   console.log(chalk.gray(`Input:    ${inputDir}`));
   console.log(chalk.gray(`Output:   ${outputDir}`));
   console.log(chalk.gray(`Settings: ${settingsPath}`));
 
   // 3. Load/Init State
-  let projectState = {
+  let projectState: OrchestratorState = {
     glossary: [],
     characters: [],
     memory: '',
     knowledgeBase: '',
-    processedChapters: [] // Tracking for resume logic
+    processedChapters: [], // Tracking for resume logic
+    skippedChapters: []   // Chapters removed by cleanup
   };
 
   // Try to load existing progress
   try {
     const existing = await fs.readFile(settingsPath, 'utf-8');
     projectState = JSON.parse(existing);
-    console.log(chalk.yellow(`Resuming: ${projectState.processedChapters.length} chapters processed.`));
+    console.log(chalk.yellow(`Resuming: ${projectState.processedChapters.length} chapters refined, ${projectState.skippedChapters.length} chapters skipped.`));
   } catch {
     // Try to load bootstrap if no progress exists
     try {
@@ -128,13 +142,15 @@ async function main() {
       return { id: idref, href: manifestItems[idref] };
     }).filter(s => s.href.endsWith('.xhtml') || s.href.endsWith('.html'));
 
-    const progressBar = multiBar.create(spine.length, 0, { filename });
     const opfDir = path.dirname(opfPath);
 
     // 6. Cleanup Pass (AI Filter)
     console.log(chalk.dim(`  🧹 Cleaning up junk from ${filename}...`));
-    const validSpine = await runCleanup(zip, spine, opfDir, filterPrompt, aiConfig);
-    console.log(chalk.dim(`  Keep: ${validSpine.length} / ${spine.length} items.`));
+    const validSpine = await runCleanup(zip, spine, opfDir, filterPrompt, aiConfig, filename, projectState);
+    console.log(chalk.dim(`  Refining: ${validSpine.length} / ${spine.length} items.`));
+
+    // Update progress bar with corrected total
+    const progressBar = multiBar.create(validSpine.length, 0, { filename });
 
     // 7. Refinement Loop
     for (const item of validSpine) {
@@ -148,15 +164,30 @@ async function main() {
       }
 
       const chapterPath = path.posix.join(opfDir, item.href);
-      const content = await zip.file(chapterPath)!.async('string');
+      const originalContent = await zip.file(chapterPath)!.async('string');
+      
+      // Prune context to only include what's relevant to this chapter
+      const relevantCharacters = projectState.characters.filter(c => {
+        const name = (c.name || '').toLowerCase();
+        const aliases = (c.aliases || []).map((a: string) => a.toLowerCase());
+        const text = originalContent.toLowerCase();
+        return name && (text.includes(name) || aliases.some((a: string) => text.includes(a)));
+      });
+
+      const relevantGlossary = projectState.glossary.filter(g => {
+        const term = (g.term || '').toLowerCase();
+        const searches = (g.searches || []).map((s: string) => s.toLowerCase());
+        const text = originalContent.toLowerCase();
+        return term && (text.includes(term) || searches.some((s: string) => text.includes(s)));
+      });
 
       const response = await callAi(
         JSON.stringify({
           knowledgeBase: projectState.knowledgeBase,
-          glossary: projectState.glossary,
-          characters: projectState.characters,
+          glossary: relevantGlossary,
+          characters: relevantCharacters,
           storyMemory: projectState.memory,
-          chapterContent: content
+          chapterContent: originalContent
         }),
         refinementPrompt,
         aiConfig
@@ -167,6 +198,12 @@ async function main() {
         // Update content in ZIP
         if (result.refinedContent) {
           await zip.file(chapterPath, result.refinedContent);
+          
+          // Save working file with diff
+          const workingPath = await getWriteableDataPath(path.join(workingDirBase, filename, `${item.id}.html`));
+          const diffHtml = generateDiffHtml(originalContent, result.refinedContent);
+          const finalHtml = createWorkingHtml(diffHtml, originalContent, result.refinedContent);
+          await fs.writeFile(workingPath, finalHtml);
         }
         
         // Update State
@@ -208,15 +245,25 @@ async function main() {
   console.log(chalk.bold.green('\n🏁 Batch Refinement Complete!'));
 }
 
-async function runCleanup(zip: JSZip, spine: any[], opfDir: string, prompt: string, ai: any) {
+async function runCleanup(zip: JSZip, spine: any[], opfDir: string, prompt: string, ai: any, filename: string, state: any) {
   const toSkip = new Set<string>();
+
+  // Use previously skipped chapters if available
+  const knownSkipped = new Set(state.skippedChapters.filter((id: string) => id.startsWith(`${filename}-`)).map((id: string) => id.replace(`${filename}-`, '')));
 
   // 1. Scan from the start
   for (let i = 0; i < Math.min(spine.length, 10); i++) {
     const item = spine[i];
+    if (knownSkipped.has(item.id)) {
+      toSkip.add(item.id);
+      continue;
+    }
     const isJunk = await checkIsJunk(zip, item, opfDir, prompt, ai);
     if (isJunk) {
       toSkip.add(item.id);
+      if (!state.skippedChapters.includes(`${filename}-${item.id}`)) {
+        state.skippedChapters.push(`${filename}-${item.id}`);
+      }
     } else {
       break; // Found first story chapter, stop scanning forward
     }
@@ -226,9 +273,16 @@ async function runCleanup(zip: JSZip, spine: any[], opfDir: string, prompt: stri
   for (let i = spine.length - 1; i >= Math.max(0, spine.length - 5); i--) {
     const item = spine[i];
     if (toSkip.has(item.id)) continue;
+    if (knownSkipped.has(item.id)) {
+      toSkip.add(item.id);
+      continue;
+    }
     const isJunk = await checkIsJunk(zip, item, opfDir, prompt, ai);
     if (isJunk) {
       toSkip.add(item.id);
+      if (!state.skippedChapters.includes(`${filename}-${item.id}`)) {
+        state.skippedChapters.push(`${filename}-${item.id}`);
+      }
     } else {
       break; // Found last story chapter, stop scanning backward
     }
@@ -321,6 +375,50 @@ function applyTidyResult(state: any, result: any) {
       state.glossary = state.glossary.filter((e: any) => !ids.has(e.id));
     }
   }
+}
+
+function stripTags(html: string) {
+  return html.replace(/<[^>]*>?/gm, '');
+}
+
+function generateDiffHtml(oldHtml: string, newHtml: string) {
+  const oldText = stripTags(oldHtml);
+  const newText = stripTags(newHtml);
+  const changes = diff.diffWords(oldText, newText);
+  
+  return changes.map(part => {
+    const color = part.added ? '#e6ffec' : part.removed ? '#ffebe9' : 'transparent';
+    const decoration = part.removed ? 'text-decoration: line-through;' : '';
+    const text = part.value.replace(/\n/g, '<br>');
+    return `<span style="background-color: ${color}; ${decoration}">${text}</span>`;
+  }).join('');
+}
+
+function createWorkingHtml(diffHtml: string, original: string, refined: string) {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Refinement Progress</title>
+  <style>
+    body { font-family: sans-serif; line-height: 1.6; max-width: 900px; margin: 40px auto; padding: 20px; background: #f6f8fa; color: #24292f; }
+    .container { background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    h1 { color: #0969da; border-bottom: 1px solid #d0d7de; padding-bottom: 10px; }
+    .diff-container { white-space: pre-wrap; word-wrap: break-word; }
+    .hidden { display: none; }
+    .meta { color: #57606a; font-size: 0.9em; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Unified Comparison</h1>
+    <div class="meta">HTML tags hidden for clarity. Red = Removed | Green = Added</div>
+    <div class="diff-container">${diffHtml}</div>
+  </div>
+  <div class="hidden" id="raw-original"><pre>${original.replace(/</g, '&lt;')}</pre></div>
+  <div class="hidden" id="raw-refined"><pre>${refined.replace(/</g, '&lt;')}</pre></div>
+</body>
+</html>`;
 }
 
 main().catch(err => {
