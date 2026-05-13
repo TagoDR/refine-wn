@@ -227,7 +227,8 @@ async function main() {
       if (result) {
         // Update content in ZIP
         if (result.refinedProse) {
-          await zip.file(chapterPath, result.refinedProse);
+          const validXhtml = wrapInXhtml(result.refinedProse, `${filename} - ${item.id}`);
+          await zip.file(chapterPath, validXhtml);
           
           // Save working file with diff
           const workingPath = await getWriteableDataPath(path.join(workingDirBase, filename, `${item.id}.html`));
@@ -435,6 +436,25 @@ function applyTidyResult(state: any, result: any) {
 
 function stripTags(html: string) {
   return html.replace(/<[^>]*>?/gm, '');
+}
+
+function wrapInXhtml(content: string, title: string) {
+  // If it already looks like a full XHTML document, return it
+  if (content.includes('<html') && content.includes('<body')) {
+    return content;
+  }
+
+  return `<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+  <title>${title}</title>
+  <meta charset="utf-8" />
+</head>
+<body>
+  ${content}
+</body>
+</html>`;
 }
 
 function generateDiffHtml(oldHtml: string, newHtml: string) {
