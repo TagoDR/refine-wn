@@ -163,6 +163,7 @@ async function main() {
 
       // 6. Cleanup Pass (AI Filter)
       console.log(chalk.dim(`  🧹 Cleaning up junk from ${filename}...`));
+      const beforeCount = projectState.skippedChapters.length;
       const validSpine = await runCleanup(
         zip,
         spine,
@@ -173,6 +174,10 @@ async function main() {
         projectState,
         settingsPath,
       );
+      const afterCount = projectState.skippedChapters.length;
+      if (afterCount > beforeCount) {
+        console.log(chalk.dim(`    ✅ Updated skipped chapters: ${beforeCount} -> ${afterCount}`));
+      }
 
       // Physical Removal from EPUB and State Persistence
       const junkIds = new Set(spine.filter(s => !validSpine.includes(s)).map(s => s.id));
@@ -364,12 +369,14 @@ async function runCleanup(
     const chapterId = `${filename}-${item.id}`;
 
     if (knownSkipped.has(item.id)) {
+      console.log(chalk.dim(`      ⏭️  Skipping cached junk chapter: ${item.id}`));
       toSkip.add(item.id);
       continue;
     }
 
     const isJunk = await checkIsJunk(zip, item, opfDir, prompt, ai);
     if (isJunk) {
+      console.log(chalk.yellow(`      🗑️  Identified new junk chapter: ${item.id}`));
       toSkip.add(item.id);
       if (!state.skippedChapters.includes(chapterId)) {
         state.skippedChapters.push(chapterId);
@@ -389,12 +396,14 @@ async function runCleanup(
 
     if (toSkip.has(item.id)) continue;
     if (knownSkipped.has(item.id)) {
+      console.log(chalk.dim(`      ⏭️  Skipping cached junk chapter: ${item.id}`));
       toSkip.add(item.id);
       continue;
     }
 
     const isJunk = await checkIsJunk(zip, item, opfDir, prompt, ai);
     if (isJunk) {
+      console.log(chalk.yellow(`      🗑️  Identified new junk chapter: ${item.id}`));
       toSkip.add(item.id);
       if (!state.skippedChapters.includes(chapterId)) {
         state.skippedChapters.push(chapterId);
