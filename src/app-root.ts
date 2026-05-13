@@ -2,17 +2,17 @@ import { css, html, LitElement } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { AiBridge } from './services/ai-bridge';
 import { BatchRefinementService } from './services/batch-refinement-service';
+import { CharacterService } from './services/character-service';
 import { type AppConfig, ConfigService } from './services/config-service';
 import type { Chapter, EpubMetadata } from './services/epub-service';
 import { EpubWorkerClient } from './services/epub-worker-client';
 import { type GlossaryEntry, GlossaryManager } from './services/glossary-manager';
-import { StoryMemoryService } from './services/story-memory';
-import { TextCleaner } from './services/text-cleaner';
-import { CharacterService } from './services/character-service';
 import { KnowledgeBaseService } from './services/knowledge-base';
 import { PortabilityService } from './services/portability-service';
+import { StoryMemoryService } from './services/story-memory';
+import { TextCleaner } from './services/text-cleaner';
 import { VolumeBootstrapService } from './services/volume-bootstrap-service';
-import type { LogEntry, Character } from './types';
+import type { Character, LogEntry } from './types';
 
 // Modular Column Components
 import './components/chapter-column';
@@ -414,7 +414,10 @@ export class AppRoot extends LitElement {
     if (this.selectedChapterIndex === -1) return;
     this.isProcessing = true;
     this.statusMessage = `Refining: ${this.chapters[this.selectedChapterIndex].title}`;
-    this.addLog('info', `Starting individual refinement: ${this.chapters[this.selectedChapterIndex].title}`);
+    this.addLog(
+      'info',
+      `Starting individual refinement: ${this.chapters[this.selectedChapterIndex].title}`,
+    );
 
     try {
       this.chapters[this.selectedChapterIndex] = {
@@ -554,7 +557,10 @@ export class AppRoot extends LitElement {
             changesMade = true;
           }
         }
-        this.addLog('success', `Moved ${result.movedToCharacters.length} terms to Character Glossary.`);
+        this.addLog(
+          'success',
+          `Moved ${result.movedToCharacters.length} terms to Character Glossary.`,
+        );
       }
 
       // 2. Handle Merged Terms
@@ -644,7 +650,9 @@ export class AppRoot extends LitElement {
       // Update KB and Memory (appending)
       if (result.knowledgeBase) {
         const currentKB = this.knowledgeBaseService.getKnowledgeBase();
-        await this.knowledgeBaseService.save(`${currentKB}\n\n--- Bootstrapped Context ---\n${result.knowledgeBase}`);
+        await this.knowledgeBaseService.save(
+          `${currentKB}\n\n--- Bootstrapped Context ---\n${result.knowledgeBase}`,
+        );
       }
       if (result.storyMemory) {
         await this.storyMemoryService.save(result.storyMemory);
@@ -768,7 +776,9 @@ export class AppRoot extends LitElement {
 					@import-glossary=${() => (this.shadowRoot?.getElementById('glossary-import') as HTMLInputElement | null)?.click()}
 					@export-glossary=${this.handleExportGlossary}
 					@clear-glossary=${async () => {
-            if (confirm('Are you sure you want to clear all settings? Use Export first if unsure.')) {
+            if (
+              confirm('Are you sure you want to clear all settings? Use Export first if unsure.')
+            ) {
               await this.glossaryManager.clear();
               await this.characterService.clear();
               await this.storyMemoryService.clear();
@@ -989,17 +999,14 @@ export class AppRoot extends LitElement {
             ? html`
 					<div style="display:flex; flex-direction:column; gap: var(--wa-space-m);">
 						<div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--wa-space-m);">
-							<wa-input label="Name" .value=${this.editingCharacter.name} @input=${(
-                e: Event,
-              ) => {
+							<wa-input label="Name" .value=${this.editingCharacter.name} @input=${(e: Event) => {
                 if (this.editingCharacter)
                   this.editingCharacter.name = (e.target as HTMLInputElement).value;
               }}></wa-input>
 							<wa-select label="Category" .value=${this.editingCharacter.category} @change=${(
                 e: Event,
               ) => {
-                if (this.editingCharacter)
-                  this.editingCharacter.category = (e.target as any).value;
+                if (this.editingCharacter) this.editingCharacter.category = (e.target as any).value;
               }}>
 								<wa-option value="Main">Main</wa-option>
 								<wa-option value="Supporting">Supporting</wa-option>
@@ -1009,14 +1016,14 @@ export class AppRoot extends LitElement {
 						</div>
 
 						<wa-input label="Aliases (comma separated)" .value=${this.editingCharacter.aliases.join(', ')} @input=${(
-                e: Event,
-              ) => {
-                if (this.editingCharacter)
-                  this.editingCharacter.aliases = (e.target as HTMLInputElement).value
-                    .split(',')
-                    .map(s => s.trim())
-                    .filter(s => !!s);
-              }}></wa-input>
+              e: Event,
+            ) => {
+              if (this.editingCharacter)
+                this.editingCharacter.aliases = (e.target as HTMLInputElement).value
+                  .split(',')
+                  .map(s => s.trim())
+                  .filter(s => !!s);
+            }}></wa-input>
 
 						<div style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--wa-space-m);">
 							<wa-input label="Gender" .value=${this.editingCharacter.gender} @input=${(
@@ -1034,27 +1041,27 @@ export class AppRoot extends LitElement {
 						</div>
 
 						<wa-textarea label="Relationships" .value=${this.editingCharacter.relationships} @input=${(
-                e: Event,
-              ) => {
-                if (this.editingCharacter)
-                  this.editingCharacter.relationships = (e.target as HTMLTextAreaElement).value;
-              }}></wa-textarea>
+              e: Event,
+            ) => {
+              if (this.editingCharacter)
+                this.editingCharacter.relationships = (e.target as HTMLTextAreaElement).value;
+            }}></wa-textarea>
 
 						${
               this.editingCharacter.category === 'Main'
                 ? html`
 							<wa-textarea label="Items" .value=${this.editingCharacter.items || ''} @input=${(
-                    e: Event,
-                  ) => {
-                    if (this.editingCharacter)
-                      this.editingCharacter.items = (e.target as HTMLTextAreaElement).value;
-                  }}></wa-textarea>
+                e: Event,
+              ) => {
+                if (this.editingCharacter)
+                  this.editingCharacter.items = (e.target as HTMLTextAreaElement).value;
+              }}></wa-textarea>
 							<wa-textarea label="Techniques" .value=${this.editingCharacter.techniques || ''} @input=${(
-                    e: Event,
-                  ) => {
-                    if (this.editingCharacter)
-                      this.editingCharacter.techniques = (e.target as HTMLTextAreaElement).value;
-                  }}></wa-textarea>
+                e: Event,
+              ) => {
+                if (this.editingCharacter)
+                  this.editingCharacter.techniques = (e.target as HTMLTextAreaElement).value;
+              }}></wa-textarea>
 						`
                 : ''
             }

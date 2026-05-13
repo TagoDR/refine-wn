@@ -1,12 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import JSZip from 'jszip';
-import { DOMParser } from 'linkedom';
 import chalk from 'chalk';
 import * as cliProgress from 'cli-progress';
-import { glob } from 'glob';
 import * as diff from 'diff';
-import { loadConfig, resolveDataPath, getWriteableDataPath, ensureDir } from './utils.js';
+import { glob } from 'glob';
+import JSZip from 'jszip';
+import { DOMParser } from 'linkedom';
+import { ensureDir, getWriteableDataPath, loadConfig, resolveDataPath } from './utils.js';
 
 /**
  * CLI Refine Tool for Batch EPUB Refinement
@@ -42,7 +42,9 @@ async function main() {
   await fs.mkdir(inputDir, { recursive: true });
   await fs.mkdir(outputDir, { recursive: true });
   // Ensure base working dir exists
-  await resolveDataPath(workingDirBase).then(p => fs.mkdir(p, { recursive: true })).catch(() => {});
+  await resolveDataPath(workingDirBase)
+    .then(p => fs.mkdir(p, { recursive: true }))
+    .catch(() => {});
 
   console.log(chalk.gray(`Input:    ${inputDir}`));
   console.log(chalk.gray(`Output:   ${outputDir}`));
@@ -55,14 +57,18 @@ async function main() {
     memory: '',
     knowledgeBase: '',
     processedChapters: [], // Tracking for resume logic
-    skippedChapters: []   // Chapters removed by cleanup
+    skippedChapters: [], // Chapters removed by cleanup
   };
 
   // Try to load existing progress
   try {
     const existing = await fs.readFile(settingsPath, 'utf-8');
     projectState = JSON.parse(existing);
-    console.log(chalk.yellow(`Resuming: ${projectState.processedChapters.length} chapters refined, ${projectState.skippedChapters.length} chapters skipped.`));
+    console.log(
+      chalk.yellow(
+        `Resuming: ${projectState.processedChapters.length} chapters refined, ${projectState.skippedChapters.length} chapters skipped.`,
+      ),
+    );
   } catch {
     // Try to load bootstrap if no progress exists
     try {
@@ -79,12 +85,17 @@ async function main() {
   }
 
   // 4. Load Prompts
-  const refinementPrompt = await fs.readFile(path.join(instructionsDir, 'consolidated-refinement.md'), 'utf-8');
+  const refinementPrompt = await fs.readFile(
+    path.join(instructionsDir, 'consolidated-refinement.md'),
+    'utf-8',
+  );
   const filterPrompt = await fs.readFile(path.join(instructionsDir, 'content-filter.md'), 'utf-8');
   const tidierPrompt = await fs.readFile(path.join(instructionsDir, 'glossary-tidier.md'), 'utf-8');
 
   // 5. Scan EPUBs
-  const epubs = (await glob('*.epub', { cwd: inputDir, absolute: true })).sort((a, b) => a.localeCompare(b));
+  const epubs = (await glob('*.epub', { cwd: inputDir, absolute: true })).sort((a, b) =>
+    a.localeCompare(b),
+  );
   if (epubs.length === 0) {
     console.log(chalk.red(`\nNo EPUB files found in ${inputDir}. Exiting.`));
     return;
@@ -97,270 +108,376 @@ async function main() {
     process.exit(0);
   });
 
-  const multiBar = new cliProgress.MultiBar({
-    clearOnComplete: false,
-    hideCursor: true,
-    format: chalk.magenta('{bar}') + ' {percentage}% | {value}/{total} Chapters | {filename}',
-  }, cliProgress.Presets.shades_grey);
+  const multiBar = new cliProgress.MultiBar(
+    {
+      clearOnComplete: false,
+      hideCursor: true,
+      format: chalk.magenta('{bar}') + ' {percentage}% | {value}/{total} Chapters | {filename}',
+    },
+    cliProgress.Presets.shades_grey,
+  );
 
-  let tidyCounter = 0;
+  try {
+    let tidyCounter = 0;
 
-  for (const epubPath of epubs) {
-    const filename = path.basename(epubPath);
-    const exportPath = path.join(outputDir, `Refined_${filename}`);
+    for (const epubPath of epubs) {
+      const filename = path.basename(epubPath);
+      const exportPath = path.join(outputDir, `Refined_${filename}`);
 
-    // Skip if file already exists in output folder
-    try {
-      await fs.access(exportPath);
-      console.log(chalk.dim(`⏭️ Skipping already processed file: ${filename}`));
-      continue;
-    } catch {
-      // File doesn't exist, proceed
-    }
-
-    console.log(chalk.bold(`\n📖 Processing: ${filename}`));
-
-    const buffer = await fs.readFile(epubPath);
-    const zip = await JSZip.loadAsync(buffer);
-    
-    // Simple Manifest/Spine parsing to get chapters in order
-    const containerXml = await zip.file('META-INF/container.xml')!.async('string');
-    const opfPath = containerXml.match(/full-path="([^"]+)"/)?.[1] || '';
-    const opfContent = await zip.file(opfPath)!.async('string');
-    const opfDoc = new DOMParser().parseFromString(opfContent, 'text/xml');
-    
-    const manifestItems = Array.from(opfDoc.getElementsByTagName('item')).reduce((acc, item) => {
-      acc[item.getAttribute('id') || ''] = item.getAttribute('href') || '';
-      return acc;
-    }, {} as Record<string, string>);
-
-    const spine = Array.from(opfDoc.getElementsByTagName('itemref')).map(ref => {
-      const idref = ref.getAttribute('idref') || '';
-      return { id: idref, href: manifestItems[idref] };
-    }).filter(s => s.href && (s.href.endsWith('.xhtml') || s.href.endsWith('.html')));
-
-    const opfDir = path.dirname(opfPath);
-
-    // 6. Cleanup Pass (AI Filter)
-    console.log(chalk.dim(`  🧹 Cleaning up junk from ${filename}...`));
-    const validSpine = await runCleanup(zip, spine, opfDir, filterPrompt, aiConfig, filename, projectState);
-    
-    // Physical Removal from EPUB and State Persistence
-    const junkIds = new Set(spine.filter(s => !validSpine.includes(s)).map(s => s.id));
-    if (junkIds.size > 0) {
-      for (const item of spine) {
-        if (junkIds.has(item.id)) {
-          // 1. Remove file from ZIP
-          zip.remove(path.posix.join(opfDir, item.href));
-          // 2. Remove from OPF DOM
-          const manifestItem = opfDoc.querySelector(`item[id="${item.id}"]`);
-          const spineItem = opfDoc.querySelector(`itemref[idref="${item.id}"]`);
-          manifestItem?.remove();
-          spineItem?.remove();
-        }
-      }
-      // 3. Serialize and save updated OPF
-      const updatedOpf = opfDoc.toString();
-      await zip.file(opfPath, updatedOpf);
-      // 4. Persist skippedChapters in settings.json
-      await fs.writeFile(settingsPath, JSON.stringify(projectState, null, 2));
-      console.log(chalk.dim(`  Removed ${junkIds.size} junk chapters from EPUB manifest.`));
-    }
-
-    console.log(chalk.dim(`  Refining: ${validSpine.length} / ${spine.length} items.`));
-
-    // Update progress bar with corrected total
-    const progressBar = multiBar.create(validSpine.length, 0, { filename });
-
-    // 7. Refinement Loop
-    for (const item of validSpine) {
-      const chapterId = `${filename}-${item.id}`;
-      const chapterPath = path.posix.join(opfDir, item.href);
-
-      if (projectState.processedChapters.includes(chapterId)) {
-        // Load refined content from working file to ensure the final EPUB is correct
-        try {
-          const workingPath = await resolveDataPath(path.join(workingDirBase, filename, `${item.id}.html`));
-          const html = await fs.readFile(workingPath, 'utf-8');
-          const doc = new DOMParser().parseFromString(html, 'text/html');
-          const refined = doc.getElementById('raw-refined')?.textContent || '';
-          if (refined) {
-            await zip.file(chapterPath, refined);
-          }
-        } catch (e) {
-          // If working file is missing, it stays as original in this zip instance
-        }
-        progressBar.increment();
+      // Skip if file already exists in output folder
+      try {
+        await fs.access(exportPath);
+        console.log(chalk.dim(`⏭️ Skipping already processed file: ${filename}`));
         continue;
+      } catch {
+        // File doesn't exist, proceed
       }
 
-      const originalContent = await zip.file(chapterPath)!.async('string');
-      
-      // Prune context to only include what's relevant to this chapter
-      const relevantCharacters = projectState.characters.filter(c => {
-        const name = (c.name || '').toLowerCase();
-        const aliases = (c.aliases || []).map((a: string) => a.toLowerCase());
-        const text = originalContent.toLowerCase();
-        return name && (text.includes(name) || aliases.some((a: string) => text.includes(a)));
-      });
+      console.log(chalk.bold(`\n📖 Processing: ${filename}`));
 
-      const relevantGlossary = projectState.glossary.filter(g => {
-        const term = (g.term || '').toLowerCase();
-        const searches = (g.searches || []).map((s: string) => s.toLowerCase());
-        const text = originalContent.toLowerCase();
-        return term && (text.includes(term) || searches.some((s: string) => text.includes(s)));
-      });
+      const buffer = await fs.readFile(epubPath);
+      const zip = await JSZip.loadAsync(buffer);
 
-      const response = await callAi(
-        JSON.stringify({
-          knowledgeBase: projectState.knowledgeBase,
-          glossary: relevantGlossary,
-          characters: relevantCharacters,
-          storyMemory: projectState.memory,
-          chapterContent: originalContent
-        }),
-        refinementPrompt,
-        aiConfig
+      // Simple Manifest/Spine parsing to get chapters in order
+      const containerXml = await zip.file('META-INF/container.xml')!.async('string');
+      const opfPath = containerXml.match(/full-path="([^"]+)"/)?.[1] || '';
+      const opfContent = await zip.file(opfPath)!.async('string');
+      const opfDoc = new DOMParser().parseFromString(opfContent, 'text/xml');
+
+      const manifestItems = Array.from(opfDoc.getElementsByTagName('item')).reduce(
+        (acc, item) => {
+          acc[item.getAttribute('id') || ''] = item.getAttribute('href') || '';
+          return acc;
+        },
+        {} as Record<string, string>,
       );
 
-      const result = parseXmlResponse(response);
-      if (result) {
-        // Update content in ZIP
-        if (result.refinedProse) {
-          const validXhtml = wrapInXhtml(result.refinedProse, `${filename} - ${item.id}`);
-          await zip.file(chapterPath, validXhtml);
-          
-          // Save working file with diff
-          const workingPath = await getWriteableDataPath(path.join(workingDirBase, filename, `${item.id}.html`));
-          const diffHtml = generateDiffHtml(originalContent, result.refinedProse);
-          const finalHtml = createWorkingHtml(diffHtml, originalContent, result.refinedProse);
-          await fs.writeFile(workingPath, finalHtml);
+      const spine = Array.from(opfDoc.getElementsByTagName('itemref'))
+        .map(ref => {
+          const idref = ref.getAttribute('idref') || '';
+          return { id: idref, href: manifestItems[idref] };
+        })
+        .filter(s => s.href && (s.href.endsWith('.xhtml') || s.href.endsWith('.html')));
+
+      const opfDir = path.dirname(opfPath);
+
+      // 6. Cleanup Pass (AI Filter)
+      console.log(chalk.dim(`  🧹 Cleaning up junk from ${filename}...`));
+      const validSpine = await runCleanup(
+        zip,
+        spine,
+        opfDir,
+        filterPrompt,
+        aiConfig,
+        filename,
+        projectState,
+        settingsPath,
+      );
+
+      // Physical Removal from EPUB and State Persistence
+      const junkIds = new Set(spine.filter(s => !validSpine.includes(s)).map(s => s.id));
+      if (junkIds.size > 0) {
+        for (const item of spine) {
+          if (junkIds.has(item.id)) {
+            // 1. Remove file from ZIP
+            zip.remove(path.posix.join(opfDir, item.href));
+            // 2. Remove from OPF DOM
+            const manifestItem = opfDoc.querySelector(`item[id="${item.id}"]`);
+            const spineItem = opfDoc.querySelector(`itemref[idref="${item.id}"]`);
+            manifestItem?.remove();
+            spineItem?.remove();
+          }
         }
-        
-        // Update State
-        if (result.updatedMemory) projectState.memory = result.updatedMemory.trim();
-        if (result.extractedTerms) {
-          const terms = result.extractedTerms.filter((t: any) => t.category !== 'Name');
-          const chars = result.extractedTerms.filter((t: any) => t.category === 'Name');
-          mergeTerms(projectState.glossary, terms);
-          mergeCharacters(projectState.characters, chars);
-        }
-        
-        projectState.processedChapters.push(chapterId);
+        // 3. Serialize and save updated OPF
+        const updatedOpf = opfDoc.toString();
+        await zip.file(opfPath, updatedOpf);
+        // 4. Persist skippedChapters in settings.json
         await fs.writeFile(settingsPath, JSON.stringify(projectState, null, 2));
+        console.log(chalk.dim(`  Removed ${junkIds.size} junk chapters from EPUB manifest.`));
       }
 
-      progressBar.increment();
-      tidyCounter++;
+      console.log(chalk.dim(`  Refining: ${validSpine.length} / ${spine.length} items.`));
 
-      // 8. Tidy Periodically
-      if (tidyCounter >= 5) {
-        tidyCounter = 0;
-        const tidyResponse = await callAi(
+      // Update progress bar with corrected total
+      const progressBar = multiBar.create(validSpine.length, 0, { filename });
+
+      // 7. Refinement Loop
+      for (const item of validSpine) {
+        const chapterId = `${filename}-${item.id}`;
+        const chapterPath = path.posix.join(opfDir, item.href);
+
+        let skipRefinement = false;
+        if (projectState.processedChapters.includes(chapterId)) {
+          // Load refined content from working file to ensure the final EPUB is correct
+          try {
+            const workingPath = await resolveDataPath(
+              path.join(workingDirBase, filename, `${item.id}.html`),
+            );
+            const html = await fs.readFile(workingPath, "utf-8");
+            const doc = new DOMParser().parseFromString(html, "text/html");
+            let refined = doc.getElementById("raw-refined")?.textContent || "";
+
+            // Repair: If working file accidentally stored full HTML tags in the raw area
+            if (refined.includes("<html") || refined.includes("<body")) {
+              refined = extractBodyContent(refined);
+              // Update the working file with the repaired content to prevent future issues
+              const original = doc.getElementById("raw-original")?.textContent || "";
+              const diffHtml = generateDiffHtml(original, refined);
+              const finalHtml = createWorkingHtml(diffHtml, original, refined);
+              await fs.writeFile(workingPath, finalHtml);
+            }
+
+            if (refined) {
+              const validXhtml = wrapInXhtml(refined, `${filename} - ${item.id}`);
+              await zip.file(chapterPath, validXhtml);
+              skipRefinement = true;
+            }
+          } catch (e) {
+            // If working file is missing, we don't skip; it falls through to refinement
+            console.log(chalk.yellow(`\n⚠️ Working file missing for ${chapterId}. Re-refining...`));
+          }
+        }
+
+        if (skipRefinement) {
+          progressBar.increment();
+          continue;
+        }
+
+        const originalContent = await zip.file(chapterPath)!.async("string");
+
+        // Prune context to only include what's relevant to this chapter
+        const relevantCharacters = projectState.characters.filter((c) => {
+          const name = (c.name || "").toLowerCase();
+          const aliases = (c.aliases || []).map((a: string) => a.toLowerCase());
+          const text = originalContent.toLowerCase();
+          return name && (text.includes(name) || aliases.some((a: string) => text.includes(a)));
+        });
+
+        const relevantGlossary = projectState.glossary.filter((g) => {
+          const term = (g.term || "").toLowerCase();
+          const searches = (g.searches || []).map((s: string) => s.toLowerCase());
+          const text = originalContent.toLowerCase();
+          return term && (text.includes(term) || searches.some((s: string) => text.includes(s)));
+        });
+
+        const response = await callAi(
           JSON.stringify({
-            glossary: projectState.glossary,
-            characters: projectState.characters,
-            knowledgeBase: projectState.knowledgeBase
+            knowledgeBase: projectState.knowledgeBase,
+            glossary: relevantGlossary,
+            characters: relevantCharacters,
+            storyMemory: projectState.memory,
+            chapterContent: originalContent,
           }),
-          tidierPrompt,
-          aiConfig
+          refinementPrompt,
+          aiConfig,
         );
-        const tidyData = parseXmlResponse(tidyResponse);
-        if (tidyData) applyTidyResult(projectState, tidyData);
+
+        const result = parseXmlResponse(response);
+        if (result) {
+          // Update content in ZIP
+          if (result.refinedProse) {
+            const normalizedProse = extractBodyContent(result.refinedProse);
+            const validXhtml = wrapInXhtml(normalizedProse, `${filename} - ${item.id}`);
+            await zip.file(chapterPath, validXhtml);
+
+            // Save working file with diff
+            const workingPath = await getWriteableDataPath(
+              path.join(workingDirBase, filename, `${item.id}.html`),
+            );
+            const diffHtml = generateDiffHtml(originalContent, normalizedProse);
+            const finalHtml = createWorkingHtml(diffHtml, originalContent, normalizedProse);
+            await fs.writeFile(workingPath, finalHtml);
+          }
+
+          // Update State
+          if (result.updatedMemory) projectState.memory = result.updatedMemory.trim();
+          if (result.extractedTerms) {
+            const terms = result.extractedTerms.filter((t: any) => t.category !== 'Name');
+            const chars = result.extractedTerms.filter((t: any) => t.category === 'Name');
+            mergeTerms(projectState.glossary, terms);
+            mergeCharacters(projectState.characters, chars);
+          }
+
+          if (!projectState.processedChapters.includes(chapterId)) {
+            projectState.processedChapters.push(chapterId);
+          }
+          await fs.writeFile(settingsPath, JSON.stringify(projectState, null, 2));
+        }
+
+        progressBar.increment();
+        tidyCounter++;
+
+        // 8. Tidy Periodically
+        if (tidyCounter >= 5) {
+          tidyCounter = 0;
+          const tidyResponse = await callAi(
+            JSON.stringify({
+              glossary: projectState.glossary,
+              characters: projectState.characters,
+              knowledgeBase: projectState.knowledgeBase,
+            }),
+            tidierPrompt,
+            aiConfig,
+          );
+          const tidyData = parseXmlResponse(tidyResponse);
+          if (tidyData) applyTidyResult(projectState, tidyData);
+        }
       }
+
+      // 9. Export Refined EPUB
+      const outBuffer = await zip.generateAsync({ type: 'nodebuffer' });
+      await fs.writeFile(exportPath, outBuffer);
+      console.log(chalk.green(`\n✅ Saved: ${exportPath}`));
     }
-
-    // 9. Export Refined EPUB
-    const outBuffer = await zip.generateAsync({ type: 'nodebuffer' });
-    await fs.writeFile(exportPath, outBuffer);
-    console.log(chalk.green(`\n✅ Saved: ${exportPath}`));
+  } catch (err) {
+    multiBar.stop();
+    throw err;
+  } finally {
+    multiBar.stop();
   }
-
-  multiBar.stop();
   console.log(chalk.bold.green('\n🏁 Batch Refinement Complete!'));
 }
 
-async function runCleanup(zip: JSZip, spine: any[], opfDir: string, prompt: string, ai: any, filename: string, state: RefineState) {
+async function runCleanup(
+  zip: JSZip,
+  spine: any[],
+  opfDir: string,
+  prompt: string,
+  ai: any,
+  filename: string,
+  state: RefineState,
+  settingsPath: string,
+) {
   const toSkip = new Set<string>();
 
-  // Use previously skipped chapters if available
-  const knownSkipped = new Set(state.skippedChapters.filter((id: string) => id.startsWith(`${filename}-`)).map((id: string) => id.replace(`${filename}-`, '')));
+  // 1. Identify previously skipped chapters for this file
+  const knownSkipped = new Set(
+    state.skippedChapters
+      .filter((id: string) => id.startsWith(`${filename}-`))
+      .map((id: string) => id.replace(`${filename}-`, "")),
+  );
 
-  // 1. Scan from the start
-  for (let i = 0; i < Math.min(spine.length, 10); i++) {
+  console.log(chalk.dim(`    🔍 Scanning for story start...`));
+  // 2. Scan from the start (limit to 15 chapters to avoid scanning whole book if AI fails)
+  for (let i = 0; i < Math.min(spine.length, 15); i++) {
     const item = spine[i];
+    const chapterId = `${filename}-${item.id}`;
+
     if (knownSkipped.has(item.id)) {
       toSkip.add(item.id);
       continue;
     }
+
     const isJunk = await checkIsJunk(zip, item, opfDir, prompt, ai);
     if (isJunk) {
       toSkip.add(item.id);
-      if (!state.skippedChapters.includes(`${filename}-${item.id}`)) {
-        state.skippedChapters.push(`${filename}-${item.id}`);
+      if (!state.skippedChapters.includes(chapterId)) {
+        state.skippedChapters.push(chapterId);
+        await fs.writeFile(settingsPath, JSON.stringify(state, null, 2));
       }
     } else {
-      break; // Found first story chapter, stop scanning forward
+      console.log(chalk.dim(`    📍 Story found at index ${i}: ${item.id}`));
+      break; // Found first story chapter
     }
   }
 
-  // 2. Scan from the end
-  for (let i = spine.length - 1; i >= Math.max(0, spine.length - 5); i--) {
+  console.log(chalk.dim(`    🔍 Scanning for story end...`));
+  // 3. Scan from the end (limit to 10 chapters)
+  for (let i = spine.length - 1; i >= Math.max(0, spine.length - 10); i--) {
     const item = spine[i];
+    const chapterId = `${filename}-${item.id}`;
+
     if (toSkip.has(item.id)) continue;
     if (knownSkipped.has(item.id)) {
       toSkip.add(item.id);
       continue;
     }
+
     const isJunk = await checkIsJunk(zip, item, opfDir, prompt, ai);
     if (isJunk) {
       toSkip.add(item.id);
-      if (!state.skippedChapters.includes(`${filename}-${item.id}`)) {
-        state.skippedChapters.push(`${filename}-${item.id}`);
+      if (!state.skippedChapters.includes(chapterId)) {
+        state.skippedChapters.push(chapterId);
+        await fs.writeFile(settingsPath, JSON.stringify(state, null, 2));
       }
     } else {
-      break; // Found last story chapter, stop scanning backward
+      console.log(chalk.dim(`    📍 Story ends at index ${i}: ${item.id}`));
+      break; // Found last story chapter
     }
   }
 
-  return spine.filter(s => !toSkip.has(s.id));
+  return spine.filter((s) => !toSkip.has(s.id));
 }
 
 async function checkIsJunk(zip: JSZip, item: any, opfDir: string, prompt: string, ai: any) {
-  const content = await zip.file(path.posix.join(opfDir, item.href))!.async('string');
-  const doc = new DOMParser().parseFromString(content, 'text/html');
-  const text = doc.body.textContent || '';
+  const content = await zip.file(path.posix.join(opfDir, item.href))!.async("string");
+  const doc = new DOMParser().parseFromString(content, "text/html");
+  const text = (doc.body.textContent || "").trim();
+
+  if (text.length < 50) return true; // Micro-chapters are almost certainly junk
+
+  // Use a slightly larger sample for better context
+  const response = await callAi(text.substring(0, 2000), prompt, ai);
+  try {
+    const match = response.match(/\{[\s\S]*\}/);
+    if (match) {
+      const json = JSON.parse(match[0]);
+      return json.remove === true;
+    }
+  } catch (e) {
+    // Fallback if JSON parsing fails
+  }
   
-  // Use a very small sample and no context for speed
-  const response = await callAi(text.substring(0, 1500), prompt, ai);
-  return response.toLowerCase().includes('junk');
+  // Last resort fallback
+  return response.toLowerCase().includes('"remove": true') || response.toLowerCase().includes("junk");
 }
 
-async function callAi(prompt: string, system: string, ai: any) {
-  try {
-    const response = await fetch(ai.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: ai.model,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: prompt }
-        ],
-        temperature: ai.temperature || 0.1,
-      })
-    });
-    if (!response.ok) return '{}';
-    const data = await response.json() as any;
-    return data.choices[0].message.content;
-  } catch {
-    return '{}';
+async function callAi(prompt: string, system: string, ai: any, retries = 3) {
+  let lastError: any;
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(ai.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: ai.model,
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: prompt },
+          ],
+          temperature: ai.temperature || 0.1,
+        }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`AI Server returned ${response.status}: ${text}`);
+      }
+
+      const data = (await response.json()) as any;
+      if (!data.choices?.[0]?.message?.content) {
+        throw new Error('Invalid AI response format (missing content)');
+      }
+      return data.choices[0].message.content;
+    } catch (err: any) {
+      lastError = err;
+      if (i < retries - 1) {
+        const delay = 1000 * (i + 1); // Simple backoff
+        console.log(
+          chalk.yellow(
+            `\n⚠️ AI call failed: ${err.message}. Retrying in ${delay / 1000}s... (Attempt ${i + 1}/${retries})`,
+          ),
+        );
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
   }
+  throw lastError;
 }
 
 function parseXmlResponse(text: string) {
   const result: any = {};
-  
+
   const proseMatch = text.match(/<refined_prose>([\s\S]*?)<\/refined_prose>/);
   if (proseMatch) result.refinedProse = proseMatch[1].trim();
 
@@ -387,7 +504,7 @@ function parseXmlResponse(text: string) {
     }
   }
 
-  return (result.refinedProse || result.updatedMemory || result.extractedTerms) ? result : null;
+  return result.refinedProse || result.updatedMemory || result.extractedTerms ? result : null;
 }
 
 function mergeCharacters(existing: any[], news: any[]) {
@@ -397,7 +514,9 @@ function mergeCharacters(existing: any[], news: any[]) {
     const found = existing.find(e => (e.name || '').toLowerCase() === name.toLowerCase());
     if (found) {
       const aliases = new Set([...(found.aliases || []), ...(n.aliases || n.searches || [])]);
-      found.aliases = Array.from(aliases).filter(a => a.toLowerCase() !== (found.name || '').toLowerCase());
+      found.aliases = Array.from(aliases).filter(
+        a => a.toLowerCase() !== (found.name || '').toLowerCase(),
+      );
     } else {
       existing.push({ id: crypto.randomUUID(), name, ...n });
     }
@@ -411,7 +530,9 @@ function mergeTerms(existing: any[], news: any[]) {
     const found = existing.find(e => (e.term || '').toLowerCase() === term.toLowerCase());
     if (found) {
       const searches = new Set([...(found.searches || []), ...(n.searches || [])]);
-      found.searches = Array.from(searches).filter(s => s.toLowerCase() !== (found.term || '').toLowerCase());
+      found.searches = Array.from(searches).filter(
+        s => s.toLowerCase() !== (found.term || '').toLowerCase(),
+      );
     } else {
       existing.push({ id: crypto.randomUUID(), term, ...n });
     }
@@ -438,11 +559,20 @@ function stripTags(html: string) {
   return html.replace(/<[^>]*>?/gm, '');
 }
 
-function wrapInXhtml(content: string, title: string) {
-  // If it already looks like a full XHTML document, return it
-  if (content.includes('<html') && content.includes('<body')) {
-    return content;
+function extractBodyContent(html: string) {
+  if (html.includes('<body')) {
+    const match = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+    if (match) return match[1].trim();
   }
+  // Remove any stray html/head tags if body wasn't found but they exist
+  return html
+    .replace(/<\/?html[^>]*>/gi, '')
+    .replace(/<head[\s\S]*?<\/head>/gi, '')
+    .trim();
+}
+
+function wrapInXhtml(content: string, title: string) {
+  const bodyContent = extractBodyContent(content);
 
   return `<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
@@ -452,7 +582,7 @@ function wrapInXhtml(content: string, title: string) {
   <meta charset="utf-8" />
 </head>
 <body>
-  ${content}
+  ${bodyContent}
 </body>
 </html>`;
 }
@@ -461,13 +591,15 @@ function generateDiffHtml(oldHtml: string, newHtml: string) {
   const oldText = stripTags(oldHtml);
   const newText = stripTags(newHtml);
   const changes = diff.diffWords(oldText, newText);
-  
-  return changes.map(part => {
-    const color = part.added ? '#e6ffec' : part.removed ? '#ffebe9' : 'transparent';
-    const decoration = part.removed ? 'text-decoration: line-through;' : '';
-    const text = part.value.replace(/\n/g, '<br>');
-    return `<span style="background-color: ${color}; ${decoration}">${text}</span>`;
-  }).join('');
+
+  return changes
+    .map(part => {
+      const color = part.added ? '#e6ffec' : part.removed ? '#ffebe9' : 'transparent';
+      const decoration = part.removed ? 'text-decoration: line-through;' : '';
+      const text = part.value.replace(/\n/g, '<br>');
+      return `<span style="background-color: ${color}; ${decoration}">${text}</span>`;
+    })
+    .join('');
 }
 
 function createWorkingHtml(diffHtml: string, original: string, refined: string) {

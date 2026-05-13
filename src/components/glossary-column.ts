@@ -92,7 +92,9 @@ export class GlossaryColumn extends LitElement {
 				${this.entries.map(
           entry => html`
 					<div class="glossary-item" @click=${() =>
-            this.dispatchEvent(new CustomEvent<GlossaryEntry>('edit-entry', { detail: entry }))} style="cursor: pointer;">
+            this.dispatchEvent(
+              new CustomEvent<GlossaryEntry>('edit-entry', { detail: entry }),
+            )} style="cursor: pointer;">
 						<div style="display:flex; justify-content:space-between; align-items:flex-start;">
 							<div class="glossary-term">${entry.term}</div>
 							<div class="actions">

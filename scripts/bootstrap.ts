@@ -1,12 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import JSZip from 'jszip';
-import { DOMParser } from 'linkedom';
 import chalk from 'chalk';
 import * as cliProgress from 'cli-progress';
 import { glob } from 'glob';
+import JSZip from 'jszip';
+import { DOMParser } from 'linkedom';
 
-import { loadConfig, ensureDir, resolveDataPath, getWriteableDataPath } from './utils.js';
+import { ensureDir, getWriteableDataPath, loadConfig, resolveDataPath } from './utils.js';
 
 /**
  * CLI Bootstrap Script for RefineWN
@@ -20,12 +20,12 @@ async function main() {
   const config = await loadConfig();
   const aiEndpoint = config.ai.endpoint;
   const aiModel = config.ai.model;
-  
+
   // 2. Resolve Paths
   // inputDir is relative to data root (dist/data or public/data)
   const inputDir = await resolveDataPath(config.bootstrap.inputDir);
   const instructionsDir = await ensureDir(config.bootstrap.instructionsDir);
-  
+
   // settingsPath is relative to data root, and we want to ensure it's writeable
   const settingsPath = await getWriteableDataPath(config.bootstrap.settingsFile);
 
@@ -36,7 +36,10 @@ async function main() {
   console.log(chalk.gray(`Output settings: ${settingsPath}`));
 
   // 3. Load Instructions
-  const historianPrompt = await fs.readFile(path.join(instructionsDir, 'previous-volume-analyzer.md'), 'utf-8');
+  const historianPrompt = await fs.readFile(
+    path.join(instructionsDir, 'previous-volume-analyzer.md'),
+    'utf-8',
+  );
   const tidierPrompt = await fs.readFile(path.join(instructionsDir, 'glossary-tidier.md'), 'utf-8');
 
   // 4. Load/Init Settings
@@ -44,19 +47,25 @@ async function main() {
     glossary: [],
     characters: [],
     memory: '',
-    knowledgeBase: ''
+    knowledgeBase: '',
   };
 
   try {
     const existing = await fs.readFile(settingsPath, 'utf-8');
     projectState = JSON.parse(existing);
-    console.log(chalk.yellow(`Updating existing context: ${projectState.glossary.length} terms, ${projectState.characters.length} characters.`));
+    console.log(
+      chalk.yellow(
+        `Updating existing context: ${projectState.glossary.length} terms, ${projectState.characters.length} characters.`,
+      ),
+    );
   } catch {
     console.log(chalk.green('Initializing new context.'));
   }
 
   // 5. Scan EPUBs
-  const epubs = (await glob('*.epub', {cwd: inputDir, absolute: true})).sort((a, b) => a.localeCompare(b));
+  const epubs = (await glob('*.epub', { cwd: inputDir, absolute: true })).sort((a, b) =>
+    a.localeCompare(b),
+  );
   if (epubs.length === 0) {
     console.log(chalk.red(`\nNo EPUB files found in ${inputDir}. Exiting.`));
     return;
@@ -64,26 +73,33 @@ async function main() {
 
   console.log(chalk.white(`Found ${epubs.length} books to process.\n`));
 
-  const multiBar = new cliProgress.MultiBar({
-    clearOnComplete: false,
-    hideCursor: true,
-    format: chalk.cyan('{bar}') + ' {percentage}% | {value}/{total} Chunks | {eta_formatted} rem | {filename}',
-  }, cliProgress.Presets.shades_grey);
+  const multiBar = new cliProgress.MultiBar(
+    {
+      clearOnComplete: false,
+      hideCursor: true,
+      format:
+        chalk.cyan('{bar}') +
+        ' {percentage}% | {value}/{total} Chunks | {eta_formatted} rem | {filename}',
+    },
+    cliProgress.Presets.shades_grey,
+  );
 
   const startTime = Date.now();
 
   for (const epubPath of epubs) {
     const filename = path.basename(epubPath);
     console.log(chalk.bold(`\n📖 Processing: ${filename}`));
-    
+
     // Parse EPUB
     const buffer = await fs.readFile(epubPath);
     const zip = await JSZip.loadAsync(buffer);
-    
+
     // Find all XHTML/HTML files
-    const contentFiles = Object.keys(zip.files).filter(f => f.endsWith('.xhtml') || f.endsWith('.html'));
+    const contentFiles = Object.keys(zip.files).filter(
+      f => f.endsWith('.xhtml') || f.endsWith('.html'),
+    );
     let fullText = '';
-    
+
     for (const f of contentFiles) {
       const html = await zip.file(f)!.async('string');
       const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -106,34 +122,39 @@ async function main() {
       if (data) {
         mergeCharacters(projectState.characters, data.characters || []);
         mergeTerms(projectState.glossary, data.terms || []);
-        if (data.knowledgeBase) projectState.knowledgeBase += `\n\n--- ${filename} (pt ${i+1}) ---\n${data.knowledgeBase}`;
+        if (data.knowledgeBase)
+          projectState.knowledgeBase += `\n\n--- ${filename} (pt ${i + 1}) ---\n${data.knowledgeBase}`;
         if (data.storyMemory) projectState.memory = data.storyMemory;
       }
-      
+
       progressBar.increment();
     }
 
     // Tidy after each book
     console.log(chalk.gray(`\n🧹 Tidying glossary for ${filename}...`));
     const tidyResponse = await callAi(
-      JSON.stringify({ 
-        glossary: projectState.glossary, 
+      JSON.stringify({
+        glossary: projectState.glossary,
         characters: projectState.characters,
-        knowledgeBase: projectState.knowledgeBase 
-      }), 
-      tidierPrompt, 
-      aiEndpoint, 
-      aiModel
+        knowledgeBase: projectState.knowledgeBase,
+      }),
+      tidierPrompt,
+      aiEndpoint,
+      aiModel,
     );
     const tidyData = parseJsonResponse(tidyResponse);
     if (tidyData) {
-       applyTidyResult(projectState, tidyData);
+      applyTidyResult(projectState, tidyData);
     }
 
     // Incremental save
     await fs.writeFile(settingsPath, JSON.stringify(projectState, null, 2));
-    
-    console.log(chalk.dim(`Status: ${projectState.glossary.length} Terms | ${projectState.characters.length} Characters`));
+
+    console.log(
+      chalk.dim(
+        `Status: ${projectState.glossary.length} Terms | ${projectState.characters.length} Characters`,
+      ),
+    );
   }
 
   multiBar.stop();
@@ -151,14 +172,14 @@ async function callAi(prompt: string, system: string, endpoint: string, model: s
         model,
         messages: [
           { role: 'system', content: system },
-          { role: 'user', content: prompt }
+          { role: 'user', content: prompt },
         ],
         temperature: 0.1,
-      })
+      }),
     });
 
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json() as any;
+    const data = (await response.json()) as any;
     return data.choices[0].message.content;
   } catch (err) {
     console.error(chalk.red(`\nAI Call failed: ${err}`));
@@ -188,11 +209,13 @@ function mergeCharacters(existing: any[], news: any[]) {
       existing.push({
         id: crypto.randomUUID(),
         name,
-        aliases: (n.aliases || n.searches || []).filter((s: string) => s.toLowerCase() !== name.toLowerCase()),
+        aliases: (n.aliases || n.searches || []).filter(
+          (s: string) => s.toLowerCase() !== name.toLowerCase(),
+        ),
         category: n.category || 'Supporting',
         gender: n.gender || '',
         affiliation: n.affiliation || '',
-        relationships: n.relationships || ''
+        relationships: n.relationships || '',
       });
     }
   }
@@ -211,7 +234,7 @@ function mergeTerms(existing: any[], news: any[]) {
         id: crypto.randomUUID(),
         term,
         searches: (n.searches || []).filter((s: string) => s.toLowerCase() !== term.toLowerCase()),
-        category: n.category || 'Other'
+        category: n.category || 'Other',
       });
     }
   }

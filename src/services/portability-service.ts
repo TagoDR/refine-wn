@@ -1,8 +1,8 @@
 import type { ProjectState } from '../types';
-import { CharacterService } from './character-service';
-import { GlossaryManager } from './glossary-manager';
-import { KnowledgeBaseService } from './knowledge-base';
-import { StoryMemoryService } from './story-memory';
+import type { CharacterService } from './character-service';
+import type { GlossaryManager } from './glossary-manager';
+import type { KnowledgeBaseService } from './knowledge-base';
+import type { StoryMemoryService } from './story-memory';
 
 export class PortabilityService {
   private glossaryManager: GlossaryManager;

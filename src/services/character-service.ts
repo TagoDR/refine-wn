@@ -65,7 +65,9 @@ export class CharacterService {
   /**
    * Merges extracted names into the character glossary.
    */
-  mergeCharacters(names: { name?: string; term?: string; searches?: string[]; aliases?: string[] }[]): void {
+  mergeCharacters(
+    names: { name?: string; term?: string; searches?: string[]; aliases?: string[] }[],
+  ): void {
     for (const item of names) {
       const name = item.name || item.term;
       if (!name) continue;
@@ -86,7 +88,9 @@ export class CharacterService {
         // Merge new searches into aliases, avoiding duplicates
         const mergedAliases = new Set([...existing.aliases, ...newAliases]);
         // Also ensure the original searched-for term isn't lost if it was different
-        existing.aliases = Array.from(mergedAliases).filter(a => a.toLowerCase() !== existing!.name.toLowerCase());
+        existing.aliases = Array.from(mergedAliases).filter(
+          a => a.toLowerCase() !== existing!.name.toLowerCase(),
+        );
       } else {
         // Create new character
         this.characters.push({

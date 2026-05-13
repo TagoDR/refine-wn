@@ -14,8 +14,8 @@ RefineWN is a specialized local workstation designed for translating and polishi
 - **Advanced Glossary**: Dictionary-style terminology management with support for Regex patterns.
 - **Character Glossary**: Structured metadata for characters, including aliases, relationships, and categories (Main, Supporting, etc.).
 - **Narrative Memory**: AI-driven "Story Memory" that tracks plot progress across chapters to ensure continuity.
-- **Optimized Refinement**: High-efficiency consolidated AI pass that refines prose, identifies characters, and updates story memory in a single turn.
-- **Previous Volume Bootstrap**: Rapidly initialize your narrative context by importing an EPUB of a previous volume. Available in the UI and as a high-performance CLI script.
+- **Optimized Refinement**: High-efficiency consolidated AI pass that refines prose, identifies characters, and updates story memory in a single turn. Features **automatic retries with backoff** and **content normalization** to handle varying AI output formats.
+- **Robust Cleanup**: Sequential bidirectional cleanup that skips non-story content at the boundaries of each EPUB. Results are **cached and persisted** to ensure reliability and speed during resumes.
 - **Unified Diff View**: Clear, color-coded comparison of prose changes (Additions vs. Deletions) with HTML tags hidden for readability.
 - **Visual Progress Tracking**: Real-time status indicators (Spinner/Checkmark) in the chapter list to monitor refinement progress.
 - **Background Glossary Tidier**: A concurrent background worker that reviews, merges, and tidies terminology and characters without interrupting refinement. Features real-time circular progress and instant cancellation.

@@ -103,13 +103,17 @@ export class CharacterColumn extends LitElement {
 				${this.characters.map(
           char => html`
 					<div class="char-card" @click=${() =>
-            this.dispatchEvent(new CustomEvent<Character>('edit-character', { detail: char }))} style="cursor: pointer;">
+            this.dispatchEvent(
+              new CustomEvent<Character>('edit-character', { detail: char }),
+            )} style="cursor: pointer;">
 						<div class="char-header">
 							<div class="char-name">${char.name}</div>
 							<div class="actions">
 								<wa-button size="extra-small" variant="neutral" ghost @click=${(e: Event) => {
                   e.stopPropagation();
-                  this.dispatchEvent(new CustomEvent<Character>('edit-character', { detail: char }));
+                  this.dispatchEvent(
+                    new CustomEvent<Character>('edit-character', { detail: char }),
+                  );
                 }}>
 									<wa-icon src="/icons/edit.svg"></wa-icon>
 								</wa-button>

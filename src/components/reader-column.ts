@@ -1,7 +1,7 @@
+import * as Diff from 'diff';
 import { css, html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-import * as Diff from 'diff';
 import type { Chapter } from '../services/epub-service';
 import type { LogEntry } from '../types';
 
@@ -97,7 +97,13 @@ export class ReaderColumn extends LitElement {
     let node: Node | null;
     while ((node = walk.nextNode())) {
       const el = node as HTMLElement;
-      if (el.tagName === 'P' || el.tagName === 'BR' || el.tagName === 'DIV' || el.tagName === 'H1' || el.tagName === 'H2') {
+      if (
+        el.tagName === 'P' ||
+        el.tagName === 'BR' ||
+        el.tagName === 'DIV' ||
+        el.tagName === 'H1' ||
+        el.tagName === 'H2'
+      ) {
         const newline = document.createTextNode('\n');
         el.parentNode?.insertBefore(newline, el.nextSibling);
       }

@@ -1,11 +1,11 @@
 import { get, set } from 'idb-keyval';
+import consolidatedRefinementPrompt from '../instructions/consolidated-refinement.md?raw';
 // Import prompts using Vite's ?raw
 import contentFilterPrompt from '../instructions/content-filter.md?raw';
 import glossaryArchitectPrompt from '../instructions/glossary-architect.md?raw';
+import glossaryTidierPrompt from '../instructions/glossary-tidier.md?raw';
 import memoryHistorianPrompt from '../instructions/memory-historian.md?raw';
 import narrativePolisherPrompt from '../instructions/narrative-polisher.md?raw';
-import consolidatedRefinementPrompt from '../instructions/consolidated-refinement.md?raw';
-import glossaryTidierPrompt from '../instructions/glossary-tidier.md?raw';
 import previousVolumeAnalyzerPrompt from '../instructions/previous-volume-analyzer.md?raw';
 import type { ConfigService } from './config-service';
 
@@ -110,7 +110,10 @@ export class AiBridge {
 
       if (response.ok) {
         const data = await response.json();
-        this.log(`Model ${data.status}: ${data.instance_id} in ${data.load_time_seconds}s`, 'success');
+        this.log(
+          `Model ${data.status}: ${data.instance_id} in ${data.load_time_seconds}s`,
+          'success',
+        );
         return true;
       }
 
@@ -183,9 +186,13 @@ export class AiBridge {
             error?: { message?: string; code?: string | number };
           };
           const errorMsg = errorData.error?.message || `HTTP ${response.status}`;
-          
+
           // Detect if model is not loaded (common in LM Studio)
-          if (response.status === 400 || errorMsg.toLowerCase().includes('not loaded') || errorMsg.toLowerCase().includes('no model')) {
+          if (
+            response.status === 400 ||
+            errorMsg.toLowerCase().includes('not loaded') ||
+            errorMsg.toLowerCase().includes('no model')
+          ) {
             this.log('Model not loaded. Attempting automatic reload...', 'info');
             const loaded = await this.ensureModelLoaded();
             if (loaded) {
@@ -214,7 +221,7 @@ export class AiBridge {
         return result;
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') {
-           throw err;
+          throw err;
         }
         lastError = err;
         if (err instanceof Error && err.message === 'Server Busy') {
@@ -223,11 +230,11 @@ export class AiBridge {
           await new Promise(r => setTimeout(r, 2000)); // Wait before retry
           continue;
         }
-        
+
         // Final attempt to reload on network/unknown error if it looks like a server issue
         if (retries === 1) {
-           this.log('Final retry: Refreshing model connection...', 'info');
-           await this.ensureModelLoaded();
+          this.log('Final retry: Refreshing model connection...', 'info');
+          await this.ensureModelLoaded();
         }
 
         this.log(`AI Call failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
@@ -417,12 +424,7 @@ export class AiBridge {
     this.log(`Analyzing text chunk (${Math.round(text.length / 1024)}kb)...`, 'info');
     const prompt = previousVolumeAnalyzerPrompt;
 
-    const response = await this.callAi(
-      text,
-      prompt,
-      false,
-      signal,
-    );
+    const response = await this.callAi(text, prompt, false, signal);
 
     try {
       const jsonMatch = response.match(/\{[\s\S]*\}/);

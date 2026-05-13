@@ -1,9 +1,9 @@
 import type { AiBridge } from './ai-bridge';
+import type { CharacterService } from './character-service';
 import type { ConfigService } from './config-service';
 import type { GlossaryManager } from './glossary-manager';
-import type { StoryMemoryService } from './story-memory';
-import type { CharacterService } from './character-service';
 import type { KnowledgeBaseService } from './knowledge-base';
+import type { StoryMemoryService } from './story-memory';
 import { TextCleaner } from './text-cleaner';
 import { splitText } from './text-splitter';
 

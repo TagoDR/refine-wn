@@ -84,7 +84,7 @@ export class VolumeBootstrapService {
       const name = c.name || c.term;
       if (!name) continue;
       const key = name.toLowerCase();
-      
+
       const newAliases = c.aliases || c.searches || [];
 
       if (map.has(key)) {
@@ -95,12 +95,13 @@ export class VolumeBootstrapService {
         if (c.affiliation && !char.affiliation?.includes(c.affiliation))
           char.affiliation = (char.affiliation ? `${char.affiliation}; ` : '') + c.affiliation;
         if (c.relationships && !char.relationships?.includes(c.relationships))
-          char.relationships = (char.relationships ? `${char.relationships}; ` : '') + c.relationships;
+          char.relationships =
+            (char.relationships ? `${char.relationships}; ` : '') + c.relationships;
       } else {
         map.set(key, {
-           ...c,
-           name,
-           aliases: newAliases
+          ...c,
+          name,
+          aliases: newAliases,
         });
       }
     }
@@ -121,8 +122,8 @@ export class VolumeBootstrapService {
         term.searches = Array.from(new Set([...(term.searches || []), ...newSearches]));
       } else {
         map.set(key, {
-           ...t,
-           searches: newSearches
+          ...t,
+          searches: newSearches,
         });
       }
     }

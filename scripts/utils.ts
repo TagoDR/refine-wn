@@ -62,7 +62,7 @@ export async function ensureDir(relativeOrAbsolutePath: string): Promise<string>
   const absolutePath = path.isAbsolute(relativeOrAbsolutePath)
     ? relativeOrAbsolutePath
     : path.resolve(ROOT_DIR, relativeOrAbsolutePath);
-  
+
   await fs.mkdir(absolutePath, { recursive: true });
   return absolutePath;
 }

@@ -25,6 +25,10 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
   2.  **Identifies Characters:** Discovers new individuals and maps them to the **Character Glossary**.
   3.  **Extracts Terms:** Identifies places, items, and techniques for the **Term Glossary**.
   4.  **Updates Memory:** Summarizes plot progress, character changes, and items/skills.
+- **Robust Execution:**
+  - **Retry Mechanism:** Automatically retries failed AI calls (up to 3 times) with exponential backoff to handle temporary server outages.
+  - **Content Normalization:** Automatically extracts and repairs body content, ensuring working files and final EPUBs are consistently formatted regardless of AI output variations.
+  - **Verified Resume:** Verifies the integrity of intermediate working files before skipping chapters during a resume, ensuring no data is lost.
 - **Logic:** Uses **LENIENT** matching. Instead of exact string replacement, it uses the glossaries as context to intelligently normalize names and terms within the flow of natural prose.
 - **Context:** Operates on text chunks while referencing all project metadata.
 - **Output:** A structured response with refined text, new entities, and updated memory.
@@ -34,7 +38,9 @@ The workstation is a professional environment for raw MTL (Machine Translation) 
 **Goal:** Automate the "Trash" system via Bidirectional Pruning.
 
 - **Workflow:** Performs **Bidirectional Scans** on each imported EPUB to identify junk chapters (Covers, TOCs, ads).
-- **Output:** Boolean removal decisions with rationale.
+- **Sequential Story Discovery:** Scans sequentially from both the beginning and end of the file until the first/last piece of actual story text is found.
+- **Persistent Cache:** Results are immediately persisted to `settings.json`, ensuring the cleanup phase is only run once per chapter even if the process is interrupted.
+- **Output:** Boolean removal decisions with rationale. JSON-based decision engine with heuristic pre-filtering for empty chapters.
 
 ### 3. The Glossary Tidier (Background Worker)
 

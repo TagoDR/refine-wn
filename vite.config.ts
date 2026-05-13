@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite';
-import { resolve } from 'path';
 import { builtinModules } from 'module';
+import { resolve } from 'path';
+import { defineConfig } from 'vite';
 
 export default defineConfig(({ mode }) => {
   // CLI Production Build
@@ -31,7 +31,7 @@ export default defineConfig(({ mode }) => {
             'chalk',
             'cli-progress',
             'glob',
-            'diff'
+            'diff',
           ],
         },
         ssr: true,
