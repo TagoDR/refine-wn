@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execSync } from 'node:child_process';
+import chalk from 'chalk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -9,6 +11,74 @@ const __dirname = path.dirname(__filename);
 export const ROOT_DIR = path.resolve(__dirname, '..');
 
 export const CONFIG_PATH = path.join(ROOT_DIR, 'src/config.json');
+
+/**
+ * LM Studio Lifecycle Management
+ */
+let lmsStartedByUs = false;
+
+export async function ensureLMStudio() {
+  try {
+    // Check if lms is installed
+    execSync('lms --version', { stdio: 'ignore' });
+  } catch {
+    // lms not found, skip management
+    return;
+  }
+
+  try {
+    // Check if server is already running
+    // 'lms ps' lists models, fails if server/daemon is not running
+    execSync('lms ps', { stdio: 'ignore' });
+  } catch {
+    console.log(chalk.yellow('LM Studio server not detected. Starting it via CLI...'));
+    try {
+      // Start the server
+      execSync('lms server start', { stdio: 'inherit' });
+      lmsStartedByUs = true;
+
+      // Register exit handlers to stop the server on exit
+      const cleanup = () => {
+        if (lmsStartedByUs) {
+          console.log(chalk.yellow('\nStopping LM Studio server (started by this script)...'));
+          try {
+            execSync('lms server stop', { stdio: 'inherit' });
+            lmsStartedByUs = false;
+          } catch {
+            // Ignore errors on stop
+          }
+        }
+      };
+
+      process.on('SIGINT', () => {
+        cleanup();
+        process.exit(0);
+      });
+      process.on('SIGTERM', () => {
+        cleanup();
+        process.exit(0);
+      });
+      process.on('exit', cleanup);
+
+      // Wait a moment for initialization
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (err) {
+      console.error(chalk.red('Failed to start LM Studio server. Please start it manually.'));
+    }
+  }
+}
+
+export function cleanupLMStudio() {
+  if (lmsStartedByUs) {
+    console.log(chalk.yellow('\nStopping LM Studio server (started by this script)...'));
+    try {
+      execSync('lms server stop', { stdio: 'inherit' });
+      lmsStartedByUs = false;
+    } catch {
+      // Ignore
+    }
+  }
+}
 
 /**
  * Resolves a path relative to the "Data Root".

@@ -6,7 +6,7 @@ import * as diff from 'diff';
 import { glob } from 'glob';
 import JSZip from 'jszip';
 import { DOMParser } from 'linkedom';
-import { ensureDir, getWriteableDataPath, loadConfig, resolveDataPath } from './utils.js';
+import { ensureDir, getWriteableDataPath, loadConfig, resolveDataPath, ensureLMStudio } from './utils.js';
 
 /**
  * CLI Refine Tool for Batch EPUB Refinement
@@ -23,6 +23,7 @@ interface RefineState {
 }
 
 async function main() {
+  await ensureLMStudio();
   console.log(chalk.bold.magenta('\n✨ RefineWN Batch Refiner\n'));
 
   // 1. Load Config

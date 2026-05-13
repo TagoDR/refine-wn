@@ -6,7 +6,7 @@ import { glob } from 'glob';
 import JSZip from 'jszip';
 import { DOMParser } from 'linkedom';
 
-import { ensureDir, getWriteableDataPath, loadConfig, resolveDataPath } from './utils.js';
+import { ensureDir, getWriteableDataPath, loadConfig, resolveDataPath, ensureLMStudio } from './utils.js';
 
 /**
  * CLI Bootstrap Script for RefineWN
@@ -14,6 +14,7 @@ import { ensureDir, getWriteableDataPath, loadConfig, resolveDataPath } from './
  */
 
 async function main() {
+  await ensureLMStudio();
   console.log(chalk.bold.cyan('\n🚀 RefineWN CLI Bootstrap Tool\n'));
 
   // 1. Load Config
